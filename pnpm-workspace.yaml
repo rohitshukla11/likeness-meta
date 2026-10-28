@@ -1,0 +1,7 @@
+allowBuilds:
+  sharp: false
+  unrs-resolver: false
+  protobufjs: false
+  # Not needed at runtime.
+  "@firebase/util": false
+  protobufjs: set this to true or false
