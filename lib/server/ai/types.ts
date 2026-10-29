@@ -165,7 +165,7 @@ export interface BrandAgent {
 }
 
 /** Why a shot needs an alternative: a policy refusal code, or REVIEW_FLAG with the reviewer's reasons. */
-export type AlternativeReason = { code: RefusalCode | "REVIEW_FLAG"; explanation: string };
+export type AlternativeReason = { code: RefusalCode | "REVIEW_FLAG" | "REVIEW_BLOCKED"; explanation: string };
 
 // ---------------------------------------------------------------- OutputReviewer
 

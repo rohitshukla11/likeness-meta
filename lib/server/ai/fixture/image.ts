@@ -1,7 +1,8 @@
 import "server-only";
 /**
  * ImageGenerator for development only (AI_PROVIDER=fixture): returns a stored image (FIXTURE_IMAGE_PATH)
- * instead of calling a model, so the rest of the pipeline (consent gate, label, C2PA, payment, step log)
+ * instead of calling a model; several paths separated by commas are used in turn, one per render, so
+ * one dev server can show a passing and a blocked image. The rest of the pipeline (consent gate, label, C2PA, payment, step log)
  * can be checked without a paid call. With it, the policy check is the offline stand-in in ./agent.ts. Cost 0; metrics say "fixture". Refused in production
  * (lib/server/ai/index.ts, instrumentation.ts) and by scripts/deploy-gcp.sh; never used in the demo.
  */
@@ -9,8 +10,11 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { GeneratedImage, ImageGenerator, ImageInput } from "../types";
 
+let turn = 0;
+
 function stored(): ImageInput & { name: string } {
-  const p = process.env.FIXTURE_IMAGE_PATH;
+  const paths = (process.env.FIXTURE_IMAGE_PATH ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  const p = paths[turn++ % Math.max(paths.length, 1)];
   if (!p) throw Object.assign(new Error("AI_PROVIDER=fixture needs FIXTURE_IMAGE_PATH (a JPEG or PNG on this machine)"), { status: 503 });
   const bytes = new Uint8Array(readFileSync(/*turbopackIgnore: true*/ path.resolve(/*turbopackIgnore: true*/ process.cwd(), p)));
   const png = bytes[0] === 0x89 && bytes[1] === 0x50;

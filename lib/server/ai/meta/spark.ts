@@ -41,9 +41,26 @@ export class SparkError extends Error {
 
 const EFFORTS = ["none", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 
-export function sparkConfig() {
-  const effort = process.env.MUSE_SPARK_REASONING_EFFORT?.trim();
-  if (effort && !EFFORTS.includes(effort as never)) throw new Error(`MUSE_SPARK_REASONING_EFFORT must be one of ${EFFORTS.join(", ")}`);
+/** The three kinds of Muse Spark call; each may have its own reasoning effort. The alternative shot counts as "plan". */
+export type SparkTask = "plan" | "policy" | "review";
+
+/**
+ * The built-in reasoning effort per kind of call, chosen by the eval (eval/results-spark-default.md and
+ * eval/results-spark-low.md, 2026-10-30): "low" for the plan and the review kept every refusal and
+ * delivery and cut the plan from 9.3 s to 6.1 s; the policy check, the safety check, stays at Meta's default
+ * ("high", nothing sent), since "medium" was no faster.
+ */
+const DEFAULT_EFFORT: Record<SparkTask, (typeof EFFORTS)[number] | null> = { plan: "low", policy: null, review: "low" };
+
+/**
+ * Settings for one call. Reasoning effort: MUSE_SPARK_REASONING_EFFORT_<PLAN|POLICY|REVIEW> for that kind of
+ * call, else MUSE_SPARK_REASONING_EFFORT, else the built-in default above (none sent: Meta's default, "high").
+ */
+export function sparkConfig(task?: SparkTask) {
+  const own = task ? `MUSE_SPARK_REASONING_EFFORT_${task.toUpperCase()}` : null;
+  const name = own && process.env[own]?.trim() ? own : "MUSE_SPARK_REASONING_EFFORT";
+  const effort = process.env[name]?.trim() || (task ? (DEFAULT_EFFORT[task] ?? undefined) : undefined);
+  if (effort && !EFFORTS.includes(effort as never)) throw new Error(`${name} must be one of ${EFFORTS.join(", ")}`);
   const max = Number(process.env.MUSE_SPARK_MAX_OUTPUT_TOKENS ?? 4096);
   if (!Number.isInteger(max) || max < 16) throw new Error("MUSE_SPARK_MAX_OUTPUT_TOKENS must be a whole number of at least 16");
   return { model: process.env.MUSE_SPARK_MODEL || "muse-spark-1.3", maxOutputTokens: max, effort: (effort || null) as (typeof EFFORTS)[number] | null };
@@ -52,7 +69,7 @@ export function sparkConfig() {
 type ContentPart = { type: "input_text"; text: string } | { type: "input_image"; image_url: string };
 
 /** The request body for one structured answer. Pure: the tests check it without calling Meta. */
-export function sparkRequest(task: { name: string; instructions: string; content: ContentPart[]; schema: Schema; temperature: number }, cfg = sparkConfig()) {
+export function sparkRequest(task: { name: string; kind?: SparkTask; instructions: string; content: ContentPart[]; schema: Schema; temperature: number }, cfg = sparkConfig(task.kind)) {
   assertSupported(task.schema);
   return {
     model: cfg.model,
@@ -69,6 +86,8 @@ export function sparkRequest(task: { name: string; instructions: string; content
 
 type SparkResponse = {
   model?: string;
+  /** Meta echoes the effort it used (its default is "high" when none is sent). */
+  reasoning?: { effort?: string } | null;
   status?: string;
   incomplete_details?: { reason?: string } | null;
   output?: { type: string; content?: { type: string; text?: string; refusal?: string }[] }[];
@@ -94,11 +113,13 @@ export function sparkAnswer<T>(res: SparkResponse, schema: Schema, metrics: Call
 }
 
 async function ask<T>(task: Parameters<typeof sparkRequest>[0]): Promise<{ answer: T; metrics: CallMetrics }> {
-  const cfg = sparkConfig();
+  const cfg = sparkConfig(task.kind);
   const t = Date.now();
   const res = await metaPost<SparkResponse>("/responses", sparkRequest(task, cfg), { timeoutMs: 60_000 });
   const model = res.model ?? cfg.model;
-  const metrics: CallMetrics = { provider: "meta", model, latencyMs: Date.now() - t, usage: res.usage, cost: estimateCost("meta", cfg.model, res.usage), ...(cfg.effort ? { settings: { reasoning_effort: cfg.effort } } : {}) };
+  // The effort actually used: ours if set, else the one Meta reports, so runs at different settings can be compared.
+  const effort = cfg.effort ?? res.reasoning?.effort ?? null;
+  const metrics: CallMetrics = { provider: "meta", model, latencyMs: Date.now() - t, usage: res.usage, cost: estimateCost("meta", cfg.model, res.usage), ...(effort ? { settings: { reasoning_effort: effort } } : {}) };
   return { answer: sparkAnswer<T>(res, task.schema, metrics), metrics };
 }
 
@@ -121,6 +142,7 @@ export const POLICY_SCHEMA: Schema = {
 async function checkPolicy(prompt: string, licence: LicenceDoc): Promise<ModelPolicyVerdict> {
   const { answer, metrics } = await ask<{ banned: string[]; fitsCategory: boolean; reason: string }>({
     name: "policy_check",
+    kind: "policy",
     instructions: FILTER_INSTRUCTION,
     content: [text(`Licence category: ${categoryLabel(licence)}\nPrompt: ${prompt}`)],
     schema: POLICY_SCHEMA,
@@ -171,7 +193,7 @@ const clip = (s: unknown, n: number) => String(s ?? "").replace(/\s+/g, " ").tri
 type PlanAnswer = { refused: boolean; refusalReason: string; shots: ({ prompt: string; rationale: string } & PromptDetails)[] };
 
 async function planShots(brief: BrandBrief, licence: LicenceDoc): Promise<ShotPlan> {
-  const noCall: CallMetrics = { provider: "meta", model: sparkConfig().model, latencyMs: 0, cost: null };
+  const noCall: CallMetrics = { provider: "meta", model: sparkConfig("plan").model, latencyMs: 0, cost: null };
   // The code decides first: a licence that can't render, or banned words in the brief, never reach the model.
   const whole = licenceRefusal(licence);
   if (whole) return { shots: [], decisions: [whole], metrics: noCall };
@@ -192,7 +214,7 @@ async function planShots(brief: BrandBrief, licence: LicenceDoc): Promise<ShotPl
   let answer: PlanAnswer;
   let metrics: CallMetrics;
   try {
-    ({ answer, metrics } = await ask<PlanAnswer>({ name: "shot_plan", instructions: PLAN_INSTRUCTION(useLabel(licence.use), n), content: [text(ask_)], schema: PLAN_SCHEMA, temperature: 0.7 }));
+    ({ answer, metrics } = await ask<PlanAnswer>({ name: "shot_plan", kind: "plan", instructions: PLAN_INSTRUCTION(useLabel(licence.use), n), content: [text(ask_)], schema: PLAN_SCHEMA, temperature: 0.7 }));
   } catch (e) {
     if (!(e instanceof SparkError)) throw e;
     const code = e.code === "MODEL_REFUSED" ? "MODEL_REFUSED" : "POLICY_CHECK_FAILED";
@@ -229,7 +251,7 @@ async function reviseShot(shot: ShotProposal, reason: AlternativeReason, licence
   const clean = (s: string) => withoutName(s, licence.creatorName);
   const content = [text(`Earlier shot: ${clean(shot.prompt)}\nReason (${reason.code}): ${clean(reason.explanation)}\nAspect: ${shot.aspect}`)];
   try {
-    const { answer, metrics } = await ask<ReviseAnswer>({ name: "shot_alternative", instructions: REVISE_INSTRUCTION(useLabel(licence.use)), content, schema: REVISE_SCHEMA, temperature: 0.7 });
+    const { answer, metrics } = await ask<ReviseAnswer>({ name: "shot_alternative", kind: "plan", instructions: REVISE_INSTRUCTION(useLabel(licence.use)), content, schema: REVISE_SCHEMA, temperature: 0.7 });
     if (answer.refused) return { shot: null, note: clip(answer.refusalReason, 400) || "no compliant alternative", metrics };
     const a = answer.shot;
     return {
@@ -254,13 +276,23 @@ export const sparkBrandAgent: BrandAgent = {
 
 // ---------------------------------------------------------------- output review
 
+/** Framing and pose problems the reviewer can name, each with the sentence the brand sees. */
+const FRAMING_TEXT = {
+  headroom: "The head is too close to the top edge (too little headroom).",
+  crop: "Part of the person or the product is cut off by the edge of the frame.",
+  gaze: "The person isn't looking where the shot asks.",
+  pose: "The pose differs from the shot.",
+} as const;
+const FRAMING_ISSUES = Object.keys(FRAMING_TEXT) as (keyof typeof FRAMING_TEXT)[];
+
 export const REVIEW_SCHEMA: Schema = {
   type: "object",
   additionalProperties: false,
-  required: ["productMatches", "settingMatches", "fitsLicensedUse", "bannedContent", "notes"],
+  required: ["productMatches", "settingMatches", "framingIssues", "fitsLicensedUse", "bannedContent", "notes"],
   properties: {
     productMatches: { type: "boolean", description: "the product the shot asks for is visible and is that product" },
-    settingMatches: { type: "boolean", description: "the setting and scene match the shot" },
+    settingMatches: { type: "boolean", description: "the place, background and lighting match the shot (not framing, crop, gaze or pose)" },
+    framingIssues: { type: "array", maxItems: FRAMING_ISSUES.length, items: { type: "string", enum: [...FRAMING_ISSUES] }, description: "how the framing or pose differs from the shot and the framing rules; empty if it doesn't" },
     fitsLicensedUse: { type: "boolean", description: "the image fits the licence's one allowed use" },
     bannedContent: { type: "array", maxItems: BANNED_KEYS.length, items: { type: "string", enum: BANNED_KEYS } },
     notes: { type: "string", maxLength: 600, description: "one or two plain sentences on what differs, or what was checked" },
@@ -270,21 +302,23 @@ export const REVIEW_SCHEMA: Schema = {
 const REVIEW_INSTRUCTION = `You review a finished ad image made under a likeness licence, before it is delivered to the brand.
 Compare the image with the shot it was made from and with the licence. Answer only from what is visible in the image.
 - productMatches: the product the shot asks for is visible and is that product (true if the shot names no product).
-- settingMatches: the setting and scene match the shot.
+- settingMatches: the place, background and lighting match the shot. Framing, crop, gaze and pose are not the setting: put them in framingIssues and leave settingMatches true when only they differ.
+- framingIssues: each that applies, compared with the shot and these framing rules (${FRAMING_RULES}): "headroom" (the head too close to the top edge), "crop" (the face, hands or product cut off by the frame), "gaze" (not looking where the shot asks), "pose" (a different pose from the shot). Empty if none.
 - fitsLicensedUse: the image fits the licence's one allowed use.
 - bannedContent: any banned use the image shows: political, adult (sexual or revealing), minors (anyone childlike), impersonation (the person presented as someone else or as endorsing something), deception (fake evidence, fake news, staged real events). Empty if none.
 - notes: one or two plain sentences.
 Your answer is a proposal: the code decides what happens. Return JSON matching the schema.`;
 
-type ReviewAnswer = { productMatches: boolean; settingMatches: boolean; fitsLicensedUse: boolean; bannedContent: string[]; notes: string };
+type ReviewAnswer = { productMatches: boolean; settingMatches: boolean; framingIssues: (keyof typeof FRAMING_TEXT)[]; fitsLicensedUse: boolean; bannedContent: string[]; notes: string };
 
-/** The reviewer's answer as findings: banned content or a use outside the licence is a licence finding; product or setting a brief finding. */
+/** The reviewer's answer as findings: banned content or a use outside the licence is a licence finding; product, setting, framing or pose a brief finding. */
 export function reviewFindings(a: ReviewAnswer, licence: LicenceDoc): ReviewFinding[] {
   const f: ReviewFinding[] = [];
   for (const b of a.bannedContent) f.push({ kind: "licence", text: `The image shows a banned use (${b}).` });
   if (!a.fitsLicensedUse) f.push({ kind: "licence", text: `The image doesn't fit the licensed use (${useLabel(licence.use)}).` });
   if (!a.productMatches) f.push({ kind: "brief", text: "The product isn't the one in the shot." });
   if (!a.settingMatches) f.push({ kind: "brief", text: "The setting differs from the shot." });
+  for (const issue of a.framingIssues) f.push({ kind: "brief", text: FRAMING_TEXT[issue] });
   return f;
 }
 
@@ -294,6 +328,7 @@ export const sparkReviewer: OutputReviewer = {
   async review(image, shot, licence) {
     const { answer, metrics } = await ask<ReviewAnswer>({
       name: "output_review",
+      kind: "review",
       instructions: REVIEW_INSTRUCTION,
       content: [text(`Licence use: ${useLabel(licence.use)}\nShot: ${shot.prompt}`), { type: "input_image", image_url: dataUrl(image) }],
       schema: REVIEW_SCHEMA,

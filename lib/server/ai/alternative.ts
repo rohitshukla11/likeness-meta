@@ -10,7 +10,8 @@ import type { LicenceDoc } from "@/lib/model";
 import { decideShots, explain } from "./policy";
 import type { AlternativeReason, BrandAgent, BrandBrief, CallMetrics, ShotDecision, ShotPlan, ShotProposal } from "./types";
 
-export const RETRYABLE: ReadonlySet<string> = new Set(["BANNED_USE", "OUTSIDE_LICENSED_USE", "EMPTY_BRIEF", "REVIEW_FLAG"]);
+// REVIEW_BLOCKED: a reviewer's block gets one automatic alternative; REVIEW_FLAG: one the brand asks for.
+export const RETRYABLE: ReadonlySet<string> = new Set(["BANNED_USE", "OUTSIDE_LICENSED_USE", "EMPTY_BRIEF", "REVIEW_FLAG", "REVIEW_BLOCKED"]);
 export const retryable = (code: string | null | undefined) => !!code && RETRYABLE.has(code);
 
 /** One attempt at a shot, for the step log: attempt 1 is the first proposal, attempt 2 the alternative. */

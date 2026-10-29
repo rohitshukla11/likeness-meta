@@ -3,7 +3,8 @@ import "server-only";
  * PersonSegmenter on Meta SAM 3.1 (sam-3.1) over the Responses API, as in the Meta console's "Get code":
  * one user message with the concept "person" and the image, stream: true, metadata.mask_encoding
  * "one_bit". The image goes as a base64 data URL (the SAM docs accept one for input_image), so nothing
- * is uploaded to the Files API and nothing needs deleting. store isn't sent: the SAM docs don't list it.
+ * is uploaded to the Files API and nothing needs deleting. store: false is sent, as for Muse Image; the SAM
+ * docs don't list it, but Meta accepted it and echoed it back on the first real call (2026-10-29).
  *
  * The stream is read strictly (./samFormat.ts): count and boxes (normalised to the image), and each
  * person's mask decoded in memory. A failed or incomplete stream, a parse error, an unknown token, an
@@ -18,8 +19,8 @@ import { decodeOneBit, readImageStream, SamFormatError } from "./samFormat";
 
 export const samModel = () => process.env.SAM_MODEL || "sam-3.1";
 
-/** The request body. Pure: the tests check it without calling Meta. */
-export function samRequest(image: ImageInput) {
+/** The request body. Pure: the tests check it without calling Meta. `sendStore: false` leaves store out (scripts/sam-check.ts, if Meta rejects it). */
+export function samRequest(image: ImageInput, { sendStore = true }: { sendStore?: boolean } = {}) {
   if (image.mime !== "image/jpeg" && image.mime !== "image/png") throw new Error(`unsupported image type ${image.mime}`);
   return {
     model: samModel(),
@@ -34,6 +35,7 @@ export function samRequest(image: ImageInput) {
       },
     ],
     stream: true,
+    ...(sendStore ? { store: false } : {}),
     metadata: { mask_encoding: "one_bit" },
   };
 }
@@ -63,9 +65,9 @@ export async function readPeople(raw: string, image: ImageInput): Promise<Omit<P
 }
 
 /** Detect people; `onRaw` receives the raw stream (used once, to save its shape with payloads cut short). */
-export async function samDetect(image: ImageInput, opts: { onRaw?: (raw: string) => void } = {}): Promise<PeopleDetection> {
+export async function samDetect(image: ImageInput, opts: { onRaw?: (raw: string) => void; sendStore?: boolean } = {}): Promise<PeopleDetection> {
   const t = Date.now();
-  const raw = await metaStream("/responses", samRequest(image), { timeoutMs: 60_000 });
+  const raw = await metaStream("/responses", samRequest(image, { sendStore: opts.sendStore }), { timeoutMs: 60_000 });
   opts.onRaw?.(raw);
   const people = await readPeople(raw, image);
   return { ...people, metrics: { provider: "meta", model: samModel(), latencyMs: Date.now() - t, cost: estimateCost("meta", "sam-3.1", undefined, 1) } };

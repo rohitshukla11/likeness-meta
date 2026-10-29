@@ -4,8 +4,9 @@ import "server-only";
  * MODEL_API_KEY". Request timeouts; retries on 429 and 5xx with exponential backoff and jitter (500 ms,
  * doubled each time, at least the server's Retry-After), as Meta's rate-limit guide recommends. Errors
  * keep the HTTP status and Meta's message. Request and response bodies are never logged: they carry
- * the creator's photos.
+ * the creator's photos. A paid script's spending cap (--max-usd, ../budget.ts) is checked before every call.
  */
+import { record, reserve } from "../budget";
 
 export const metaApiBase = () => (process.env.META_API_BASE || "https://api.meta.ai/v1").replace(/\/+$/, "");
 export const metaConfigured = () => !!process.env.MODEL_API_KEY;
@@ -27,6 +28,18 @@ export type PostOptions = { timeoutMs?: number; retries?: number; sleep?: (ms: n
 export async function metaPost<T>(path: string, body: unknown, opts: PostOptions = {}): Promise<T> {
   const key = process.env.MODEL_API_KEY;
   if (!key) throw new MetaApiError(503, "not_configured", "MODEL_API_KEY is not set");
+  const est = reserve(body);
+  try {
+    const out = await post<T>(key, path, body, opts);
+    record(body, est, { usage: (out as { usage?: Record<string, unknown> }).usage });
+    return out;
+  } catch (e) {
+    record(body, est, { refused: e instanceof MetaApiError && e.httpStatus >= 400 && e.httpStatus < 500 });
+    throw e;
+  }
+}
+
+async function post<T>(key: string, path: string, body: unknown, opts: PostOptions): Promise<T> {
   const { timeoutMs = 120_000, retries = 3, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = opts;
   for (let attempt = 0; ; attempt++) {
     let r: Response;
@@ -61,6 +74,18 @@ export async function metaPost<T>(path: string, body: unknown, opts: PostOptions
 export async function metaStream(path: string, body: unknown, opts: PostOptions = {}): Promise<string> {
   const key = process.env.MODEL_API_KEY;
   if (!key) throw new MetaApiError(503, "not_configured", "MODEL_API_KEY is not set");
+  const est = reserve(body);
+  try {
+    const out = await stream(key, path, body, opts);
+    record(body, est, {});
+    return out;
+  } catch (e) {
+    record(body, est, { refused: e instanceof MetaApiError && e.httpStatus >= 400 && e.httpStatus < 500 });
+    throw e;
+  }
+}
+
+async function stream(key: string, path: string, body: unknown, opts: PostOptions): Promise<string> {
   const { timeoutMs = 60_000, retries = 3, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = opts;
   for (let attempt = 0; ; attempt++) {
     const signal = AbortSignal.timeout(timeoutMs);

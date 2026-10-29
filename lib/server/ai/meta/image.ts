@@ -27,8 +27,24 @@ import { MetaApiError, metaPost } from "./client";
 /** Never configurable: the image comes only from the images we send. */
 export const MUSE_IMAGE_TOOL_SWITCHES = Object.freeze({ enable_image_search: false, enable_web_search: false, enable_shell: false } as const);
 
-/** Aspect → the tool's size ("WxH" sets the aspect ratio, not the pixel size). */
-export const MUSE_IMAGE_SIZES: Record<Aspect, string> = { "1:1": "1024x1024", "16:9": "1792x1008", "9:16": "1008x1792" };
+/**
+ * Aspect → the tool's size. "WxH" sets the aspect ratio, not the pixel size: the image comes at the
+ * generator's own resolution. The docs type it as a free string, but the API accepts only some values, not
+ * listed in the docs. Real calls, 2026-10-30:
+ *   accepted  "1024x1024" → 1600×1600 (1:1), "1536x1024" → 1920×1280 (3:2), "1024x1536" → 1280×1920 (2:3)
+ *   refused   "1792x1008" and "1792x1024" (the docs' own example), HTTP 400 "unknown value", nothing charged
+ * No accepted value gives 16:9 or 9:16, so with AI_PROVIDER=meta the shapes are 1:1, 3:2 and 2:3, exactly
+ * as listed here (supportedAspects in ../index.ts); anything else is refused before any model call.
+ */
+export const MUSE_IMAGE_SIZES: Partial<Record<Aspect, string>> = { "1:1": "1024x1024", "3:2": "1536x1024", "2:3": "1024x1536" };
+
+/** The tool's size for an aspect; an aspect Muse Image can't make is an error, never a guessed value. */
+export function museImageSize(aspect: Aspect | undefined): string {
+  if (!aspect) return "auto";
+  const size = MUSE_IMAGE_SIZES[aspect];
+  if (!size) throw Object.assign(new Error(`Muse Image can't make ${aspect} images yet; use ${Object.keys(MUSE_IMAGE_SIZES).join(" or ")}`), { status: 422, code: "UNSUPPORTED_SIZE" });
+  return size;
+}
 
 export type MuseImageConfig = { model: string; temperature: number; topP: number; maxOutputTokens: number; reasoningStrength: "high" | "low" };
 
@@ -41,7 +57,8 @@ const numberIn = (name: string, fallback: number, lo: number, hi: number) => {
 };
 
 export function museImageConfig(): MuseImageConfig {
-  const rs = (process.env.MUSE_IMAGE_REASONING_STRENGTH || "high").trim();
+  // "low" by default: one pass, about half the time (16 s against 31 s on the same brief, 2026-10-30), same price.
+  const rs = (process.env.MUSE_IMAGE_REASONING_STRENGTH || "low").trim();
   if (rs !== "high" && rs !== "low") throw new Error('MUSE_IMAGE_REASONING_STRENGTH must be "high" or "low"');
   return {
     model: process.env.MUSE_IMAGE_MODEL || "muse-image-1.0",
@@ -52,7 +69,7 @@ export function museImageConfig(): MuseImageConfig {
   };
 }
 
-const dataUrl = (img: ImageInput) => {
+export const dataUrl = (img: ImageInput) => {
   if (img.mime !== "image/jpeg" && img.mime !== "image/png") throw new Error(`unsupported image type ${img.mime}`);
   return `data:${img.mime};base64,${Buffer.from(img.bytes).toString("base64")}`;
 };
@@ -67,6 +84,15 @@ export function museImageRequest(referenceImages: ImageInput[], prompt: string, 
     ...(productImage ? [{ type: "input_text", text: "The brand's product photo:" }, { type: "input_image", image_url: dataUrl(productImage) }] : []),
     { type: "input_text", text: referencePrompt(prompt, n, options.aspectRatio ?? "1:1", !!productImage) },
   ];
+  return museImageBody(content, options.aspectRatio, cfg);
+}
+
+/**
+ * The request body around any content: the model settings, store and stream off, and the image tool with
+ * image search, web search and shell off. Licensed renders go through museImageRequest; the eval's
+ * synthetic faces (scripts/synthetic-faces.ts) use it directly, text only or with their own images.
+ */
+export function museImageBody(content: { type: string; text?: string; image_url?: string }[], aspectRatio: ImageOptions["aspectRatio"], cfg: MuseImageConfig) {
   return {
     model: cfg.model,
     input: [{ type: "message", role: "user", content }],
@@ -81,7 +107,7 @@ export function museImageRequest(referenceImages: ImageInput[], prompt: string, 
         ...MUSE_IMAGE_TOOL_SWITCHES,
         output_format: "png",
         reasoning_strength: cfg.reasoningStrength,
-        size: options.aspectRatio ? MUSE_IMAGE_SIZES[options.aspectRatio] : "auto",
+        size: museImageSize(aspectRatio),
       },
     ],
   };
@@ -124,7 +150,7 @@ async function generate(referenceImages: ImageInput[], prompt: string, options: 
       latencyMs: Date.now() - t,
       usage: res.usage,
       cost: estimateCost("meta", cfg.model, res.usage, 1),
-      settings: { reasoning_strength: cfg.reasoningStrength, temperature: cfg.temperature, top_p: cfg.topP, size: options.aspectRatio ? MUSE_IMAGE_SIZES[options.aspectRatio] : "auto" },
+      settings: { reasoning_strength: cfg.reasoningStrength, temperature: cfg.temperature, top_p: cfg.topP, size: museImageSize(options.aspectRatio) },
     },
   };
 }
