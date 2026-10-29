@@ -6,14 +6,14 @@ import type { Me } from "@/components/auth/AuthProvider";
 import { CATEGORIES } from "@/lib/categories";
 import { api, reason } from "@/lib/client/firebase";
 import { credits, subscriberLabel, useLabel, type Terms } from "@/lib/model";
-import { RenderCard } from "./RenderCard";
-import { useApi, when, type Lists, type Render } from "./shared";
+import { BlockedCard, RenderCard } from "./RenderCard";
+import { useApi, when, type BlockedRender, type Lists, type Render } from "./shared";
 
 export function CreatorDashboard({ me, refresh }: { me: Me; refresh: () => Promise<void> }) {
   const c = me.creator!;
   const lists = useApi<Lists>("/api/licences");
-  const renders = useApi<{ asCreator: Render[] }>("/api/renders");
-  const log = useApi<{ decryptions: { licenceId: string; renderId: string; by: string; at: number }[] }>("/api/creator/decryptions");
+  const renders = useApi<{ asCreator: Render[]; blockedAsCreator: BlockedRender[] }>("/api/renders");
+  const log = useApi<{ decryptions: { licenceId: string; renderId: string; by: string; label?: string; at: number }[] }>("/api/creator/decryptions");
   const ledger = useApi<{ ledger: { id: string; delta: number; reason: string; at: number }[] }>("/api/credits/topup");
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -32,6 +32,8 @@ export function CreatorDashboard({ me, refresh }: { me: Me; refresh: () => Promi
   };
   const pending = lists.data?.asCreator.requests.filter((r) => r.state === "pending") ?? [];
   const licences = lists.data?.asCreator.licences ?? [];
+  // Delivered and blocked images of this creator together, newest first; each card reopens its steps.
+  const cards = [...(renders.data?.asCreator ?? []).map((r) => ({ kind: "render" as const, r, at: r.createdAt })), ...(renders.data?.blockedAsCreator ?? []).map((b) => ({ kind: "blocked" as const, b, at: b.createdAt }))].sort((x, y) => y.at - x.at);
 
   return (
     <div className="flex flex-col gap-[18px]">
@@ -86,11 +88,9 @@ export function CreatorDashboard({ me, refresh }: { me: Me; refresh: () => Promi
       </Card>
 
       <Card title="Ads made with your likeness">
-        <p className="m-0 text-[14px] text-grey">Every image and video a brand made with your face, what it was for, and what you earned. Read-only.</p>
-        {(renders.data?.asCreator ?? []).length === 0 && <p className="m-0 text-grey">None yet.</p>}
-        {(renders.data?.asCreator ?? []).map((r) => (
-          <RenderCard key={r.id} r={r} mode="creator" />
-        ))}
+        <p className="m-0 text-[14px] text-grey">Every image a brand made with your face, what it was for, and what you earned; and any image that was blocked before delivery. Read-only.</p>
+        {cards.length === 0 && <p className="m-0 text-grey">None yet.</p>}
+        {cards.map((c) => (c.kind === "blocked" ? <BlockedCard key={c.b.id} b={c.b} mode="creator" /> : <RenderCard key={c.r.id} r={c.r} mode="creator" />))}
       </Card>
 
       <TermsCard terms={c.terms} onSaved={refresh} />
@@ -100,6 +100,7 @@ export function CreatorDashboard({ me, refresh }: { me: Me; refresh: () => Promi
         {(log.data?.decryptions ?? []).length === 0 && <p className="m-0 text-grey">Never.</p>}
         {(log.data?.decryptions ?? []).slice(0, 20).map((d, i) => (
           <span key={i} className="text-[14px]">
+            {d.label && <span className="mr-2 rounded-full bg-wait-bg px-2 py-0.5 text-[12px] font-semibold text-wait">{d.label}</span>}
             {when(d.at)} · licence {d.licenceId.slice(0, 8)} · render {d.renderId.slice(0, 8)} · by {d.by}
           </span>
         ))}
@@ -117,8 +118,7 @@ export function CreatorDashboard({ me, refresh }: { me: Me; refresh: () => Promi
 }
 
 function TermsCard({ terms, onSaved }: { terms: Terms | null; onSaved: () => Promise<void> }) {
-  // Terms saved before video settings existed: video allowed, 3 per licence.
-  const [t, setT] = useState<Terms | null>(terms ? { ...terms, videoAllowed: terms.videoAllowed ?? true, maxVideosPerLicence: terms.maxVideosPerLicence ?? 3 } : null);
+  const [t, setT] = useState<Terms | null>(terms);
   const [msg, setMsg] = useState<string | null>(null);
   if (!t) return null;
   const num = (k: keyof Terms, label: string) => (
@@ -139,17 +139,11 @@ function TermsCard({ terms, onSaved }: { terms: Terms | null; onSaved: () => Pro
           );
         })}
       </div>
-      <div className="grid gap-3 sm:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-3">
         {num("pricePerImage", "Price per image (credits)")}
-        {num("pricePerVideo", "Price per video (credits)")}
         {num("maxRendersPerLicence", "Max renders per licence")}
         {num("maxDays", "Max licence length (days)")}
-        {num("maxVideosPerLicence", "Max videos per licence")}
       </div>
-      <label className="flex items-center gap-2 text-[15px]">
-        <input type="checkbox" checked={t.videoAllowed} onChange={(e) => setT({ ...t, videoAllowed: e.target.checked })} className="h-5 w-5" />
-        Allow video ads (Veo animates an image ad you already licensed)
-      </label>
       <p className="m-0 text-[13px] text-grey">You approve every licence yourself. Political, adult, minor-related, impersonation and deceptive uses are never allowed.</p>
       <button
         type="button"

@@ -27,7 +27,7 @@ export function AppHeader() {
           <IconPerson size={20} />
         </Link>
         <nav aria-label="App" className="order-3 flex w-full flex-wrap gap-x-5 gap-y-1 text-[14px] font-medium sm:order-none sm:w-auto sm:flex-1 sm:gap-x-7 sm:text-[15px]">
-          {NAV.map((n) => {
+          {[...NAV, ...(me?.admin ? [{ href: "/admin", label: "Admin" }] : [])].map((n) => {
             const on = path === n.href || path.startsWith(`${n.href}/`);
             return (
               <Link key={n.href} href={n.href} aria-current={on ? "page" : undefined} className={`py-3 no-underline ${on ? "border-b-2 border-lime text-lime" : "text-white hover:text-lime"}`}>

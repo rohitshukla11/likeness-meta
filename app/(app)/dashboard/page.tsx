@@ -4,6 +4,7 @@ import { AppPage, pillClass } from "@/components/ds";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { BrandDashboard } from "@/components/dashboard/BrandDashboard";
 import { CreatorDashboard } from "@/components/dashboard/CreatorDashboard";
+import { ResetDemo } from "@/components/dashboard/ResetDemo";
 
 export default function DashboardPage() {
   const { user, me, loading, refresh } = useAuth();
@@ -34,6 +35,7 @@ export default function DashboardPage() {
     );
   return (
     <AppPage title={me.user.role === "creator" ? "Creator dashboard" : "Brand dashboard"} description={me.user.role === "creator" ? "Your licences, earnings and who opened your photos." : "Your licences, demo credits and ads."}>
+      {me.judge && <ResetDemo onDone={refresh} />}
       {me.user.role === "creator" ? <CreatorDashboard me={me} refresh={refresh} /> : <BrandDashboard me={me} refresh={refresh} />}
     </AppPage>
   );

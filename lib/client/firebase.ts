@@ -5,7 +5,7 @@
  * server once (POST /api/creator/youtube) and is not kept.
  */
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider, reauthenticateWithPopup, signInWithPopup, signOut as fbSignOut, type Auth } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, reauthenticateWithPopup, signInWithEmailAndPassword, signInWithPopup, signOut as fbSignOut, type Auth } from "firebase/auth";
 
 const config = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -28,6 +28,9 @@ export async function signIn() {
   await signInWithPopup(auth(), p);
 }
 
+/** Email and password: only the seeded judge accounts have one (scripts/seed-judges.ts). */
+export const signInWithEmail = (email: string, password: string) => signInWithEmailAndPassword(auth(), email.trim(), password);
+
 export const signOut = () => fbSignOut(auth());
 
 export const YOUTUBE_SCOPE = "https://www.googleapis.com/auth/youtube.readonly";
@@ -46,6 +49,18 @@ export async function youtubeAccessToken(): Promise<string> {
 }
 
 /** fetch() to our API with the user's Firebase ID token; throws with the server's message. */
+/** An API error with the server's reason code (lib/reasons.ts) and HTTP status. */
+export class ApiError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+    readonly code: string | null,
+    readonly retryAfter: number | null,
+  ) {
+    super(message);
+  }
+}
+
 export async function api<T>(url: string, init: RequestInit = {}): Promise<T> {
   const user = auth().currentUser;
   const headers = new Headers(init.headers);
@@ -53,7 +68,10 @@ export async function api<T>(url: string, init: RequestInit = {}): Promise<T> {
   if (init.body && !(init.body instanceof FormData)) headers.set("content-type", "application/json");
   const r = await fetch(url, { ...init, headers });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error((j as { error?: string }).error ?? `request failed (${r.status})`);
+  if (!r.ok) {
+    const b = j as { error?: string; code?: string; retryAfter?: number };
+    throw new ApiError(r.status, b.error ?? `request failed (${r.status})`, b.code ?? null, b.retryAfter ?? null);
+  }
   return j as T;
 }
 

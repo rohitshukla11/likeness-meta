@@ -8,7 +8,7 @@ const display = Unbounded({ subsets: ["latin"], weight: ["700", "800", "900"], v
 const body = Poppins({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-body-face", display: "swap" });
 
 const TAGLINE = "Your face. Your terms. Get paid per ad.";
-const DESCRIPTION = `${TAGLINE} Creators license their likeness for AI image and video ads, priced by their audience; brands generate consented ads in minutes and pay per render; anyone can verify a file.`;
+const DESCRIPTION = `${TAGLINE} Creators license their likeness for AI image ads, priced by their audience; brands generate consented ads in minutes and pay per render; anyone can verify a file.`;
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"),

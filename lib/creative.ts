@@ -1,13 +1,11 @@
 /**
- * The creative assistant's shared vocabulary: templates, moods, and the framing and motion rules.
- * The rules are appended by the server to every still prompt and every Veo prompt, whether or not
- * the brand used the assistant, so a face is never framed out by a short brief.
+ * The creative assistant's shared vocabulary: templates, moods, and the framing rules. The rules are
+ * appended by the server to every image prompt, whether or not the brand used the assistant, so a
+ * face is never framed out by a short brief.
  */
 
 export type Aspect = "1:1" | "16:9" | "9:16";
-export type VideoAspect = "16:9" | "9:16";
 export type Mood = "warm" | "energetic" | "premium" | "playful";
-export type AdFormat = "image" | "video";
 
 export const MOODS: Mood[] = ["warm", "energetic", "premium", "playful"];
 
@@ -17,7 +15,6 @@ export type AssistantInput = {
   setting: string;
   mood: Mood;
   aspect: Aspect;
-  format: AdFormat;
 };
 
 export type PromptDetails = {
@@ -33,15 +30,12 @@ export type AssistantDraft = {
   /** The detailed still prompt; it fills the Brief box and stays editable. */
   brief: string;
   details: PromptDetails;
-  /** Video ads only: what happens on screen. */
-  motion: string | null;
   aspect: Aspect;
-  format: AdFormat;
-  source: "gemini" | "template";
+  source: "gemini" | "muse-spark" | "template";
   note?: string;
 };
 
-export const DEFAULT_INPUT: AssistantInput = { idea: "", product: "", setting: "", mood: "warm", aspect: "1:1", format: "image" };
+export const DEFAULT_INPUT: AssistantInput = { idea: "", product: "", setting: "", mood: "warm", aspect: "1:1" };
 
 export const TEMPLATES: { key: string; label: string; input: Partial<AssistantInput> }[] = [
   { key: "product", label: "Product in hand", input: { idea: "product showcase", setting: "clean studio with soft daylight", mood: "warm" } },
@@ -62,18 +56,5 @@ export const ASPECT_GUIDANCE: Record<Aspect, string> = {
   "9:16": "Vertical framing: the person in the centre third, clean space above or below for a headline.",
 };
 
-export const MOTION_RULES =
-  "Subtle slow camera push-in or gentle drift; natural, relaxed movement; the full face stays in frame and well lit for the whole clip; keep the person's identity unchanged; no text, captions or logos generated.";
-
-/** The retry after a failed quality gate: a near-static camera that cannot frame the face out. */
-export const STRICT_MOTION_RULES =
-  "Static or nearly static camera, no zoom-in, no cut; the entire head and shoulders stay inside the frame at all times, the face fully visible and facing the camera; small, calm movements only.";
-
-export const VIDEO_AVOID = "Avoid: the face cropped or leaving the frame, the head turned away, extra people, distorted features, text, captions, logos, watermarks.";
-
 /** What the server adds to every still prompt. */
 export const stillRules = (aspect: Aspect) => `${FRAMING_RULES} ${ASPECT_GUIDANCE[aspect]} No text, logos or watermarks in the image.`;
-
-/** The full Veo prompt: the brand's motion, then our rules. */
-export const veoPrompt = (motion: string, aspect: VideoAspect, strict = false) =>
-  [motion.trim(), strict ? STRICT_MOTION_RULES : MOTION_RULES, FRAMING_RULES, ASPECT_GUIDANCE[aspect], VIDEO_AVOID].join("\n");

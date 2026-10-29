@@ -2,12 +2,13 @@
 import { useState } from "react";
 import { pillClass } from "@/components/ds";
 import { inputClass } from "@/components/ui";
-import { api, reason } from "@/lib/client/firebase";
+import { api } from "@/lib/client/firebase";
+import { ErrorNotice } from "./ErrorNotice";
 import { DEFAULT_INPUT, MOODS, TEMPLATES, type AssistantDraft, type AssistantInput } from "@/lib/creative";
 
 /**
  * "✨ Write it for me": a few optional inputs → a detailed prompt from Gemini, which fills the Brief
- * box (and, for a video ad, the motion box). Free; text only. Everything it writes stays editable.
+ * box. Free; text only. Everything it writes stays editable.
  */
 export function CreativeAssistant({ licenceId, onDraft }: { licenceId: string; onDraft: (d: AssistantDraft) => void }) {
   const [open, setOpen] = useState(false);
@@ -15,7 +16,7 @@ export function CreativeAssistant({ licenceId, onDraft }: { licenceId: string; o
   const [draft, setDraft] = useState<AssistantDraft | null>(null);
   const [details, setDetails] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
   const set = <K extends keyof AssistantInput>(k: K, v: AssistantInput[K]) => setInput((i) => ({ ...i, [k]: v }));
 
   const write = async (regenerate: boolean) => {
@@ -26,7 +27,7 @@ export function CreativeAssistant({ licenceId, onDraft }: { licenceId: string; o
       setDraft(r.draft);
       onDraft(r.draft);
     } catch (e) {
-      setErr(reason(e));
+      setErr(e);
     } finally {
       setBusy(false);
     }
@@ -75,20 +76,8 @@ export function CreativeAssistant({ licenceId, onDraft }: { licenceId: string; o
         ))}
       </span>
       <span className="flex flex-wrap items-center gap-2 text-[13px]">
-        <span className="text-grey">Format</span>
-        {(["image", "video"] as const).map((f) => (
-          <button
-            key={f}
-            type="button"
-            aria-pressed={input.format === f}
-            onClick={() => setInput((i) => ({ ...i, format: f, aspect: f === "video" && i.aspect === "1:1" ? "16:9" : i.aspect }))}
-            className={chip(input.format === f)}
-          >
-            {f === "image" ? "Image ad" : "Video ad"}
-          </button>
-        ))}
-        <span className="ml-2 text-grey">Aspect</span>
-        {(input.format === "video" ? (["16:9", "9:16"] as const) : (["1:1", "16:9", "9:16"] as const)).map((a) => (
+        <span className="text-grey">Aspect</span>
+        {(["1:1", "16:9", "9:16"] as const).map((a) => (
           <button key={a} type="button" aria-pressed={input.aspect === a} onClick={() => set("aspect", a)} className={chip(input.aspect === a)}>
             {a}
           </button>
@@ -110,7 +99,7 @@ export function CreativeAssistant({ licenceId, onDraft }: { licenceId: string; o
         )}
         <span className="text-[12px] text-grey">Free, text only. Every render still goes through the safety filter.</span>
       </span>
-      {draft && <span className="text-[13px] text-ok">Filled the brief{draft.motion ? " and the video motion" : ""}; edit freely. {draft.note}</span>}
+      {draft && <span className="text-[13px] text-ok">Filled the brief; edit freely. {draft.note}</span>}
       {draft && details && (
         <dl className="m-0 grid gap-x-3 gap-y-1 text-[13px] sm:grid-cols-[auto_1fr]">
           {Object.entries(draft.details).map(([k, v]) => (
@@ -119,19 +108,9 @@ export function CreativeAssistant({ licenceId, onDraft }: { licenceId: string; o
               <dd className="m-0 text-grey">{v}</dd>
             </div>
           ))}
-          {draft.motion && (
-            <div className="contents">
-              <dt className="font-semibold">Motion</dt>
-              <dd className="m-0 text-grey">{draft.motion}</dd>
-            </div>
-          )}
         </dl>
       )}
-      {err && (
-        <span role="alert" className="text-[13px] text-bad">
-          {err}
-        </span>
-      )}
+      <ErrorNotice error={err} onRetry={() => write(false)} />
     </div>
   );
 }

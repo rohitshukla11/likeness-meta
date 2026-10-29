@@ -4,12 +4,15 @@ import { api, reason } from "@/lib/client/firebase";
 import type { LicenceDoc, LicenceStatus, RequestDoc } from "@/lib/model";
 
 export type LicenceRow = LicenceDoc & { status: LicenceStatus };
+/** An image that was made but blocked (never delivered, never charged); the image itself was deleted. */
+export type BlockedRender = { id: string; licenceId: string; createdAt: number; brief: string; blockedBy: "consent" | "review" | "payment"; code: string | null; explanation: string; creatorName: string; brandName: string; use: string };
+
 export type Render = {
   id: string;
   licenceId: string;
   brandId: string;
   creatorId: string;
-  type: "image" | "video";
+  type: "image";
   renderIndex: number;
   sha256: string;
   mime: string;
@@ -19,33 +22,22 @@ export type Render = {
   fee: number;
   brief: string;
   createdAt: number;
-  pipeline?: "veo-3.1-lite" | "ffmpeg-fallback";
-  pipelineNote?: string;
-  fromRenderId?: string;
   aspect?: "1:1" | "16:9" | "9:16";
   hasPreview?: boolean;
-  /** An unlabelled still is kept, so a video ad can animate it (image ads from before Phase 2 have none). */
-  hasRaw?: boolean;
-  /** Video only: the quality gate (see lib/server/gate.ts), resolution, and how the still was framed. */
-  gate?: GateSummary;
-  resolution?: "720p" | "1080p";
-  framing?: string;
+  /** The consent gate's result (lib/server/consentGate.ts). */
+  consent?: { code: string | null; explanation: string; segmenter: string | null };
+  /** The output reviewer (skipped with AI_PROVIDER=google); "flag" means delivered with a warning. */
+  review?: { verdict: "pass" | "flag" | "block"; reasons: string[]; skipped: boolean };
+  /** Estimated model cost of this render (shown unless SHOW_MODEL_COST=0); an estimate, not a bill. */
+  cost?: { costUsd: number; complete: boolean };
   creatorName: string;
   brandName: string;
   use: string;
+  /** A development render (AI_PROVIDER=fixture): never listed for the brand or creator. */
+  fixture?: true;
 };
 
-type GateCheck = { passed: boolean; frames: number; visible: number; matched: number; need: number; threshold: number; medianSimilarity: number | null; minSimilarity: number | null; reason: string };
-export type GateSummary = GateCheck & { attempts: GateCheck[]; outcome: string };
-
-export function gateLine(g: GateSummary): string {
-  const sim = g.medianSimilarity === null ? "" : `, median match ${g.medianSimilarity.toFixed(2)} (threshold ${g.threshold})`;
-  const head = g.outcome === "passed" || g.outcome === "passed on retry" ? `Quality gate ${g.outcome}` : `Quality gate: ${g.outcome}`;
-  return `${head}: face fully visible in ${g.visible}/${g.frames} frames, matches the creator in ${g.matched}/${g.frames}${sim}.`;
-}
-
-export const pipelineLabel = (r: Pick<Render, "type" | "pipeline" | "model">) =>
-  r.type === "image" ? `Gemini (${r.model})` : r.pipeline === "veo-3.1-lite" ? "Veo 3.1 Lite" : "Free fallback motion ad (ffmpeg)";
+export const pipelineLabel = (r: Pick<Render, "model">) => `Gemini (${r.model})`;
 export type Lists = {
   asCreator: { requests: RequestDoc[]; licences: LicenceRow[] };
   asBrand: { requests: RequestDoc[]; licences: LicenceRow[] };

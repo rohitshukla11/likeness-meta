@@ -50,7 +50,7 @@ export default function CreatorPage({ params }: { params: Promise<{ id: string }
         <Card title="Request a licence">
           {t && (
             <p className="m-0 text-[15px]">
-              {credits(t.pricePerImage)} per image · {credits(t.pricePerVideo)} per video · up to {t.maxRendersPerLicence} renders · up to {t.maxDays} days.{" "}
+              {credits(t.pricePerImage)} per image · up to {t.maxRendersPerLicence} renders · up to {t.maxDays} days.{" "}
               {c.demo ? `Requests are ${AUTO_APPROVED_LABEL}.` : "The creator approves every request."}
             </p>
           )}

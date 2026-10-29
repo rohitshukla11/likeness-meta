@@ -61,11 +61,11 @@ function Verify() {
   }, [sha]);
   const kind = r?.verdict === "Licensed" ? "licensed" : r?.verdict === "Revoked" ? "revoked" : r?.verdict === "Expired" ? "expired" : "neutral";
   return (
-    <AppPage title="Verify a file" description="Was this image or video licensed by the person in it? Nothing you upload is stored.">
+    <AppPage title="Verify a file" description="Was this image licensed by the person in it? Nothing you upload is stored.">
       <Card>
         <label className={pillClass("lime", "self-start cursor-pointer")}>
-          Choose an image or video
-          <input type="file" accept="image/*,video/mp4" className="sr-only" onChange={(e) => e.target.files?.[0] && check(e.target.files[0])} />
+          Choose an image
+          <input type="file" accept="image/*" className="sr-only" onChange={(e) => e.target.files?.[0] && check(e.target.files[0])} />
         </label>
         {sha && <span className="text-[14px] text-grey">Checking this render by its receipt. To check the content credential too, download the file and upload it here.</span>}
         {busy && <span className="text-wait">Checking the receipt, its signature, the licence and the content credential…</span>}

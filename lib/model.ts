@@ -25,13 +25,9 @@ export type Channel = {
 export type Terms = {
   uses: string[]; // category keys (advertising, social, …)
   pricePerImage: number; // demo credits
-  pricePerVideo: number;
   maxRendersPerLicence: number;
   maxDays: number;
   approval: "manual";
-  /** Whether brands may make video ads (Veo) from licensed stills, and how many per licence. */
-  videoAllowed: boolean;
-  maxVideosPerLicence: number;
 };
 
 export type CreatorDoc = {
@@ -86,16 +82,12 @@ export type LicenceDoc = {
   maxRenders: number;
   renderCount: number;
   pricePerImage: number;
-  pricePerVideo: number;
-  videoAllowed: boolean;
-  maxVideos: number;
-  videoCount: number;
   revokedAt?: number;
   createdAt: number;
   autoApproved?: boolean;
 };
 
-export type RenderType = "image" | "video";
+export type RenderType = "image";
 
 export type ReceiptPayload = {
   v: 1;
@@ -110,24 +102,21 @@ export type ReceiptPayload = {
   model: string;
   price: number;
   createdAt: number;
-  /** Video only: which pipeline made it, and the licensed still it started from. */
-  pipeline?: "veo-3.1-lite" | "ffmpeg-fallback";
-  fromRenderId?: string;
 };
 
 export const FEE_PERCENT = 10;
 export const DEMO_TOPUP = 2_000; // the one demo top-up each account gets
 
-/** Default prices from audience size: bigger channels cost more per image. Video is 4× an image. */
-export function audiencePrice(subscribers: number | null): { image: number; video: number } {
+/** Default prices from audience size: bigger channels cost more per image. */
+export function audiencePrice(subscribers: number | null): { image: number } {
   const s = subscribers ?? 0;
   const image = s >= 1_000_000 ? 1_000 : s >= 100_000 ? 500 : s >= 10_000 ? 200 : s >= 1_000 ? 100 : 50;
-  return { image, video: image * 4 };
+  return { image };
 }
 
 export function defaultTerms(subscribers: number | null): Terms {
   const p = audiencePrice(subscribers);
-  return { uses: ["advertising", "social"], pricePerImage: p.image, pricePerVideo: p.video, maxRendersPerLicence: 10, maxDays: 30, approval: "manual", videoAllowed: true, maxVideosPerLicence: 3 };
+  return { uses: ["advertising", "social"], pricePerImage: p.image, maxRendersPerLicence: 10, maxDays: 30, approval: "manual" };
 }
 
 export function licenceStatus(l: Pick<LicenceDoc, "revokedAt" | "end" | "renderCount" | "maxRenders">, now = Date.now()): LicenceStatus {
@@ -144,20 +133,6 @@ export function creatorFee(price: number): { creator: number; fee: number } {
   return { creator: price - fee, fee };
 }
 
-/** Why a video can't be made under this licence right now, or null. Pure, so the UI and server agree. */
-/**
- * Licences approved before video ads existed have no video fields. They get the same defaults
- * decide() gives terms without them: video allowed, up to 3 videos (never more than the render cap).
- */
-export function withVideoDefaults<T extends Omit<LicenceDoc, "videoAllowed" | "maxVideos" | "videoCount"> & Partial<Pick<LicenceDoc, "videoAllowed" | "maxVideos" | "videoCount">>>(l: T): T & Pick<LicenceDoc, "videoAllowed" | "maxVideos" | "videoCount"> {
-  return { ...l, videoAllowed: l.videoAllowed ?? true, maxVideos: l.maxVideos ?? Math.min(3, l.maxRenders), videoCount: l.videoCount ?? 0 };
-}
-
-export type VideoResolution = "720p" | "1080p";
-
-/** 1080p (8-second clips only) costs twice the licence's video price; 720p is the default. */
-export const videoPrice = (l: Pick<LicenceDoc, "pricePerVideo">, resolution: VideoResolution = "720p") => (resolution === "1080p" ? l.pricePerVideo * 2 : l.pricePerVideo);
-
 /**
  * Synthetic demo creators (generated faces, no person behind them) approve licence requests at once,
  * within their terms. Real creators always approve each request themselves.
@@ -165,29 +140,21 @@ export const videoPrice = (l: Pick<LicenceDoc, "pricePerVideo">, resolution: Vid
 export const autoApproves = (c: { demo?: boolean } | null | undefined) => c?.demo === true;
 export const AUTO_APPROVED_LABEL = "auto-approved (synthetic demo creator)";
 
-export type DailyUsage = { renders: number; videos: number };
-export type DailyCaps = { siteRenders: number; siteVideos: number; brandRenders: number; brandVideos: number };
+/** Today's delivered renders, and images the consent gate or reviewer blocked after a paid model call. */
+export type DailyUsage = { renders: number; blocked?: number };
+export type DailyCaps = { siteRenders: number; brandRenders: number };
 
 /**
- * Daily caps while the app is open to the public: per brand (3 ads, 1 of them a video, by default)
- * and site-wide (40 ads, 10 videos). A video counts as an ad too. Returns a friendly reason, or null.
+ * Daily caps while the app is open to the public: per brand (3 ads by default) and site-wide (40 ads).
+ * Blocked images count too: each one was a paid model call. Returns a friendly reason, or null.
  */
-export function capRefusal(type: RenderType, site: DailyUsage, brand: DailyUsage, caps: DailyCaps): string | null {
+export function capRefusal(site: DailyUsage, brand: DailyUsage, caps: DailyCaps): string | null {
   const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
-  if (brand.renders >= caps.brandRenders)
-    return `You've made today's ${plural(caps.brandRenders, "ad")}, the daily limit per brand while Likeness AI is being evaluated. You can make more after 00:00 UTC.`;
-  if (type === "video" && brand.videos >= caps.brandVideos)
-    return `You've made today's video ad (${plural(caps.brandVideos, "video")} per brand per day while Likeness AI is being evaluated). You can still make image ads today, or another video after 00:00 UTC.`;
-  if (site.renders >= caps.siteRenders) return `Likeness AI has made today's ${caps.siteRenders} ads across all brands (a prototype on a small budget). Please try again after 00:00 UTC.`;
-  if (type === "video" && site.videos >= caps.siteVideos)
-    return `Likeness AI has made today's ${caps.siteVideos} video ads across all brands (a prototype on a small budget). You can still make image ads, or try a video after 00:00 UTC.`;
-  return null;
-}
-
-export function videoRefusal(l: Pick<LicenceDoc, "videoAllowed" | "maxVideos" | "videoCount">, videosToday: number, perDay: number): string | null {
-  if (!l.videoAllowed) return "this creator doesn't allow video ads under this licence";
-  if ((l.videoCount ?? 0) >= l.maxVideos) return `this licence's video limit (${l.maxVideos}) is used up`;
-  if (videosToday >= perDay) return `Likeness AI has made today's ${perDay} video ads across all brands (a prototype on a small budget). Please try again after 00:00 UTC.`;
+  const used = (u: DailyUsage) => u.renders + (u.blocked ?? 0);
+  const blockedNote = (u: DailyUsage) => (u.blocked ? ` (${plural(u.blocked, "image")} the consent check or reviewer blocked count too)` : "");
+  if (used(brand) >= caps.brandRenders)
+    return `You've used today's ${plural(caps.brandRenders, "ad")}${blockedNote(brand)}, the daily limit per brand while Likeness AI is being evaluated. You can make more after 00:00 UTC.`;
+  if (used(site) >= caps.siteRenders) return `Likeness AI has made today's ${caps.siteRenders} ads across all brands (a prototype on a small budget). Please try again after 00:00 UTC.`;
   return null;
 }
 
@@ -201,4 +168,4 @@ export function subscriberLabel(n: number | null): string {
 }
 
 export const CONSENT_TEXT =
-  "I am 18 or older (self-declared). I license my likeness to brands that I approve one by one, for the uses and prices in my terms. Each image or video made under a licence is labelled AI-generated, carries a content credential and a signed receipt. I can revoke any licence at any time; new renders are then refused.";
+  "I am 18 or older (self-declared). I license my likeness to brands that I approve one by one, for the uses and prices in my terms. Each image made under a licence is labelled AI-generated, carries a content credential and a signed receipt. I can revoke any licence at any time; new renders are then refused.";

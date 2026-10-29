@@ -3,6 +3,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AppPage, Card, pillClass } from "@/components/ds";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { JudgeSignIn } from "@/components/auth/JudgeSignIn";
 import { api, reason, signIn } from "@/lib/client/firebase";
 
 /** After sign-in: choose to be a creator or a brand (you can do both later). */
@@ -38,6 +39,7 @@ export default function StartPage() {
           Sign in with Google
         </button>
         {err && <p className="m-0 text-bad">{err}</p>}
+        <JudgeSignIn />
       </AppPage>
     );
 
@@ -51,7 +53,7 @@ export default function StartPage() {
           </button>
         </Card>
         <Card title="I'm a brand">
-          <p className="m-0 text-[15px] text-grey">Request a licence from a verified creator, then make image and video ads in minutes, paid per render.</p>
+          <p className="m-0 text-[15px] text-grey">Request a licence from a verified creator, then make image ads in minutes, paid per render.</p>
           <button type="button" disabled={busy} onClick={() => choose("brand")} className={pillClass("lime", "mt-2 self-start")}>
             License a face
           </button>

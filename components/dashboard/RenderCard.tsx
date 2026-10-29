@@ -2,13 +2,18 @@
 /**
  * One render as a preview card. The bucket stays private: previews and files load through
  * short-lived V4 signed URLs (15 minutes), fetched on demand and re-fetched before or when they expire.
+ * "Steps" reopens the render's stored step log and consent figure (brand and creator in it only).
+ * BlockedCard: an image that was made but blocked, with the same error card the brand saw (from its stored
+ * reason code); text only, the image was deleted.
  */
 import Link from "next/link";
 import { forwardRef, useCallback, useEffect, useRef, useState } from "react";
 import { pillClass } from "@/components/ds";
 import { api, reason } from "@/lib/client/firebase";
 import { useLabel } from "@/lib/model";
-import { gateLine, pipelineLabel, when, type Render } from "./shared";
+import { ErrorNotice } from "./ErrorNotice";
+import { blockedError, RenderTimeline } from "./RenderTimeline";
+import { pipelineLabel, when, type BlockedRender, type Render } from "./shared";
 
 type Signed = { url: string | null; mime: string | null; expiresAt?: number };
 
@@ -43,13 +48,13 @@ function useSignedUrl(id: string, variant: "preview" | "file", enabled = true) {
   return { url: s?.url ?? null, state, error, onError: () => void load("expired") };
 }
 
-export const RenderCard = forwardRef<HTMLDivElement, { r: Render; mode: "brand" | "creator"; highlight?: boolean; onMakeVideo?: (r: Render) => void }>(function RenderCard(
-  { r, mode, highlight, onMakeVideo },
+export const RenderCard = forwardRef<HTMLDivElement, { r: Render; mode: "brand" | "creator"; highlight?: boolean }>(function RenderCard(
+  { r, mode, highlight },
   ref,
 ) {
   const preview = useSignedUrl(r.id, "preview");
-  const file = useSignedUrl(r.id, "file", r.type === "video");
   const [open, setOpen] = useState(false);
+  const [steps, setSteps] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const ratio = r.aspect === "16:9" ? "16 / 9" : r.aspect === "9:16" ? "9 / 16" : r.aspect === "1:1" ? "1 / 1" : undefined;
 
@@ -60,19 +65,6 @@ export const RenderCard = forwardRef<HTMLDivElement, { r: Render; mode: "brand" 
       <div className="flex w-[240px] items-center justify-center rounded-[12px] bg-paper p-3 text-center text-[13px] text-bad" style={{ aspectRatio: ratio ?? "1 / 1" }}>
         Preview unavailable: {preview.error}
       </div>
-    ) : r.type === "video" ? (
-      <video
-        className="w-[240px] rounded-[12px] bg-ink"
-        style={ratio ? { aspectRatio: ratio } : undefined}
-        poster={preview.url ?? undefined}
-        src={file.url ?? undefined}
-        onError={file.onError}
-        controls
-        muted
-        playsInline
-        preload="none"
-        aria-label={`Video ad for ${r.brandName}`}
-      />
     ) : (
       <button type="button" onClick={() => setOpen(true)} className="block rounded-[12px] p-0" aria-label="Enlarge image">
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -84,11 +76,11 @@ export const RenderCard = forwardRef<HTMLDivElement, { r: Render; mode: "brand" 
     <div ref={ref} className={`flex flex-col gap-2 rounded-[16px] bg-paper p-3 sm:flex-row ${highlight ? "ring-2 ring-lime" : ""}`}>
       <div className="flex flex-col gap-1">
         {media}
-        {(preview.state === "refreshing" || file.state === "refreshing") && <span className="text-[12px] text-wait">Preview expired, refreshing…</span>}
+        {preview.state === "refreshing" && <span className="text-[12px] text-wait">Preview expired, refreshing…</span>}
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-1 text-[14px]">
         <span className="flex flex-wrap items-center gap-2">
-          <b>{r.type === "video" ? "Video ad" : "Image ad"}</b>
+          <b>Image ad</b>
           <span className="rounded-full bg-ink px-2.5 py-0.5 text-[12px] font-semibold text-lime">AI-generated · licensed likeness</span>
         </span>
         <span className="text-grey">
@@ -97,21 +89,15 @@ export const RenderCard = forwardRef<HTMLDivElement, { r: Render; mode: "brand" 
         <span className="text-grey">
           {mode === "brand" ? `Creator: ${r.creatorName}` : `Brand: ${r.brandName}`} · {useLabel(r.use)} · licence {r.licenceId.slice(0, 8)}
         </span>
-        {r.pipelineNote && r.pipeline === "ffmpeg-fallback" && <span className="text-[13px] text-wait">{r.pipelineNote}</span>}
-        {r.gate && (
-          <span className={`text-[13px] ${r.gate.outcome.startsWith("passed") ? "text-ok" : "text-wait"}`}>
-            {gateLine(r.gate)}
-            {r.gate.attempts.length > 1 && ` Veo attempts: ${r.gate.attempts.map((a) => (a.passed ? "passed" : "failed")).join(", ")}.`}
+        {r.consent && <span className="text-[13px] text-ok">Consent check passed: {r.consent.explanation}</span>}
+        {r.cost && mode === "brand" && (
+          <span className="text-[13px] text-grey">
+            Model cost: about ${r.cost.costUsd.toFixed(4)} (estimate{r.cost.complete ? "" : "; some calls have no published price"})
           </span>
         )}
-        {r.type === "video" && (r.resolution || r.framing) && <span className="text-[13px] text-grey">{[r.resolution, r.framing].filter(Boolean).join(" · ")}</span>}
+        {r.review?.verdict === "flag" && <span className="text-[13px] text-wait">Flagged by the output review: {r.review.reasons.join(" ")}</span>}
         <span className="text-[13px] text-grey">&ldquo;{r.brief.length > 120 ? `${r.brief.slice(0, 117)}…` : r.brief}&rdquo;</span>
         <span className="mt-1 flex flex-wrap gap-2">
-          {r.type === "video" && (
-            <button type="button" onClick={() => setOpen(true)} className={pillClass("outline", "min-h-9 px-3 text-[13px]")}>
-              Larger player
-            </button>
-          )}
           {mode === "brand" && (
             <button
               type="button"
@@ -130,18 +116,45 @@ export const RenderCard = forwardRef<HTMLDivElement, { r: Render; mode: "brand" 
               Verify
             </Link>
           )}
-          {mode === "brand" && r.type === "image" && r.hasRaw && onMakeVideo && (
-            <button type="button" onClick={() => onMakeVideo(r)} className={pillClass("lime", "min-h-9 px-3 text-[13px]")}>
-              Make a video from this
-            </button>
-          )}
+          <StepsButton open={steps} onClick={() => setSteps((v) => !v)} />
         </span>
+        {steps && <RenderTimeline renderId={r.id} />}
         {msg && <span className="text-[13px] text-bad">{msg}</span>}
       </div>
       {open && <Lightbox r={r} previewUrl={preview.url} onClose={() => setOpen(false)} />}
     </div>
   );
 });
+
+function StepsButton({ open, onClick }: { open: boolean; onClick: () => void }) {
+  return (
+    <button type="button" aria-expanded={open} onClick={onClick} className={pillClass("outline", "min-h-9 px-3 text-[13px]")}>
+      {open ? "Hide steps" : "Steps and consent check"}
+    </button>
+  );
+}
+
+/** An image that was made but blocked by the consent gate, the reviewer or the payment step: never delivered, never charged. */
+export function BlockedCard({ b, mode }: { b: BlockedRender; mode: "brand" | "creator" }) {
+  const [steps, setSteps] = useState(false);
+  return (
+    <div className="flex flex-col gap-1 rounded-[16px] bg-paper p-3 text-[14px]">
+      <span className="flex flex-wrap items-center gap-2">
+        <b>Image blocked</b>
+        <span className="rounded-full bg-bad-bg px-2.5 py-0.5 text-[12px] font-semibold text-bad">{b.code ?? "blocked"}</span>
+      </span>
+      <span className="text-grey">
+        {when(b.createdAt)} · not delivered · {mode === "brand" ? `Creator: ${b.creatorName}` : `Brand: ${b.brandName}`} · {useLabel(b.use)} · licence {b.licenceId.slice(0, 8)}
+      </span>
+      <ErrorNotice error={blockedError(b)} uncharged actions={false} />
+      <span className="text-[13px] text-grey">&ldquo;{b.brief.length > 120 ? `${b.brief.slice(0, 117)}…` : b.brief}&rdquo;</span>
+      <span className="mt-1 flex flex-wrap gap-2">
+        <StepsButton open={steps} onClick={() => setSteps((v) => !v)} />
+      </span>
+      {steps && <RenderTimeline renderId={b.id} blockedCard={false} />}
+    </div>
+  );
+}
 
 function Lightbox({ r, previewUrl, onClose }: { r: Render; previewUrl: string | null; onClose: () => void }) {
   // The full-size file, signed on demand.
@@ -152,15 +165,13 @@ function Lightbox({ r, previewUrl, onClose }: { r: Render; previewUrl: string | 
     return () => window.removeEventListener("keydown", k);
   }, [onClose]);
   return (
-    <div role="dialog" aria-modal="true" aria-label={r.type === "video" ? "Video ad" : "Image ad"} onClick={onClose} className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+    <div role="dialog" aria-modal="true" aria-label="Image ad" onClick={onClose} className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
       <div onClick={(e) => e.stopPropagation()} className="flex max-h-full max-w-full flex-col items-end gap-2">
         <button type="button" onClick={onClose} className={pillClass("white", "min-h-9 px-4 text-[13px]")}>
           Close
         </button>
         {full.state === "loading" ? (
           <span className="text-white">Loading…</span>
-        ) : r.type === "video" ? (
-          <video src={full.url ?? undefined} poster={previewUrl ?? undefined} onError={full.onError} controls muted playsInline autoPlay className="max-h-[85vh] max-w-[90vw] rounded-[12px] bg-ink" />
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={full.url ?? previewUrl ?? undefined} onError={full.onError} alt={`Image ad for ${r.brandName}`} className="max-h-[85vh] max-w-[90vw] rounded-[12px]" />

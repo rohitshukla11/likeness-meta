@@ -22,6 +22,8 @@ export type Me = {
   } | null;
   brand: { name: string; website: string } | null;
   credits: number;
+  judge?: boolean;
+  admin?: boolean;
 };
 
 type Ctx = { user: User | null; me: Me | null; loading: boolean; configured: boolean; refresh: () => Promise<void> };

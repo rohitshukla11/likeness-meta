@@ -21,4 +21,4 @@ export const LEGAL_SITE = "https://bionic-carving-140911.firebaseapp.com";
 export const PRIVACY_URL = `${LEGAL_SITE}/privacy`;
 export const TERMS_URL = `${LEGAL_SITE}/terms`;
 
-export const BUILT_ON = ["Vertex AI Gemini", "Veo", "Firebase", "YouTube", "Cloud KMS", "Cloud Run", "C2PA"];
+export const BUILT_ON = ["Vertex AI Gemini", "Firebase", "YouTube", "Cloud KMS", "Cloud Run", "C2PA"];

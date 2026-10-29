@@ -26,7 +26,7 @@ export default function CreatorsPage() {
               </span>
               {c.terms && (
                 <span className="text-[14px]">
-                  {credits(c.terms.pricePerImage)} per image · {credits(c.terms.pricePerVideo)} per video · {c.terms.uses.map(useLabel).join(", ")}
+                  {credits(c.terms.pricePerImage)} per image · {c.terms.uses.map(useLabel).join(", ")}
                 </span>
               )}
             </Card>

@@ -207,9 +207,9 @@ function Stats() {
 
 const STEPS = [
   { title: "PROVE IT'S YOU", body: "Connect your YouTube channel to show it's yours, then a quick live face check (blink, turn) matched to your channel avatar." },
-  { title: "SET YOUR TERMS", body: "Pick uses, a price per image and per video, and a cap. Political, adult, minor-involving, impersonating and deceptive uses are always refused." },
+  { title: "SET YOUR TERMS", body: "Pick uses, a price per image, and a cap. Political, adult, minor-involving, impersonating and deceptive uses are always refused." },
   { title: "APPROVE BRANDS", body: "A brand requests a licence and you approve it. Your photos stay encrypted with your own key in Google Cloud KMS; only the render service can open them, and every access is logged." },
-  { title: "GET PAID, OR REVOKE", body: "Each image or video ad pays you per render, with a signed receipt and a content credential. Revoke and the next render is refused." },
+  { title: "GET PAID, OR REVOKE", body: "Each image ad pays you per render, with a signed receipt and a content credential. Revoke and the next render is refused." },
 ];
 
 function HowItWorks() {
