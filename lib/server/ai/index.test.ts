@@ -23,12 +23,16 @@ describe("AI provider switch", () => {
     expect(s.provider).toBe("google");
     expect(s.imageGenerator.provider).toBe("google");
     expect(s.brandAgent.label).toBe("Gemini");
-    expect(s.brandAgent.requiresPolicyCheck).toBe(false);
-    const r = await s.reviewer.review({ bytes: new Uint8Array(), mime: "image/jpeg" }, "brief", {} as never);
-    expect(r).toMatchObject({ pass: true, skipped: true });
+    const r = await s.reviewer.review({ bytes: new Uint8Array(), mime: "image/jpeg" }, { id: "s", prompt: "p", aspect: "1:1", rationale: "" }, {} as never);
+    expect(r).toMatchObject({ verdict: "pass", skipped: true });
   });
-  it("says plainly that the meta adapters aren't built yet", () => {
+  it("gives Muse Image, SAM 3.1 and the Muse Spark agent and reviewer with meta", async () => {
     process.env.AI_PROVIDER = "meta";
-    expect(() => ai()).toThrow(/Meta adapters are not built yet/);
+    const s = ai();
+    expect(s.provider).toBe("meta");
+    expect(s.imageGenerator.provider).toBe("meta");
+    expect(s.brandAgent.label).toBe("Muse Spark");
+    expect(s.brandAgent.configHint).toBe("MODEL_API_KEY");
+    expect(s.segmenter).toBe((await import("./meta/sam")).samSegmenter);
   });
 });

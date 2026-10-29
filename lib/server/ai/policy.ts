@@ -6,7 +6,7 @@
  * lib/server/filter.ts, and refuses the render if it fails or errors.
  */
 import { licenceStatus, useLabel, type LicenceDoc } from "@/lib/model";
-import type { RefusalCode, ShotDecision, ShotProposal } from "./types";
+import type { RefusalCode, ReviewFinding, ReviewVerdict, ShotDecision, ShotProposal } from "./types";
 
 /** Plain language for each refusal; `detail` adds the specifics (a rule hit, a count, a date). */
 export function explain(code: RefusalCode, detail = ""): string {
@@ -60,4 +60,11 @@ export function decideShots(proposals: ShotProposal[], l: LicenceDoc, ruleHits: 
     allowedSoFar++;
     return { shotId: p.id, allowed: true, code: null, explanation: `Allowed under the ${useLabel(l.use)} licence (${l.renderCount + allowedSoFar} of ${l.maxRenders} renders once made). The full safety check runs again before rendering.` };
   });
+}
+
+/** The reviewer's verdict, decided by code from its findings: a licence violation blocks, a brief mismatch flags. */
+export function reviewVerdict(findings: ReviewFinding[]): ReviewVerdict {
+  if (findings.some((f) => f.kind === "licence")) return "block";
+  if (findings.some((f) => f.kind === "brief")) return "flag";
+  return "pass";
 }

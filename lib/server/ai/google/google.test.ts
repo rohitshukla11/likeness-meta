@@ -34,7 +34,7 @@ describe("Gemini ImageGenerator", () => {
     expect(parts[2].text).toMatch(/^The 2 images show one real, consenting adult/);
     expect(parts[2].text).not.toMatch(/product photo/);
     expect(body.generationConfig).toMatchObject({ responseModalities: ["IMAGE"] });
-    expect(out.metrics).toMatchObject({ provider: "google", model: "gemini-image-test", costUsd: null, usage: { totalTokenCount: 9 } });
+    expect(out.metrics).toMatchObject({ provider: "google", model: "gemini-image-test", cost: null, usage: { totalTokenCount: 9 } });
   });
 
   it("multiImage adds the product photo after the references and says which image it is", async () => {

@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import type { LicenceDoc } from "@/lib/model";
 import { ruleCheck } from "../rules";
-import { decideShots, explain, licenceRefusal } from "./policy";
+import { decideShots, explain, licenceRefusal, reviewVerdict } from "./policy";
 import type { ShotProposal } from "./types";
 
 const now = Date.UTC(2026, 10, 1);
@@ -51,5 +51,13 @@ describe("shot decisions", () => {
   it("explains every refusal code in plain language", () => {
     for (const c of ["EMPTY_BRIEF", "BANNED_USE", "OUTSIDE_LICENSED_USE", "LICENCE_REVOKED", "LICENCE_EXPIRED", "OVER_CAP", "DAILY_LIMIT", "MODEL_REFUSED", "POLICY_CHECK_FAILED"] as const)
       expect(explain(c).length).toBeGreaterThan(20);
+  });
+});
+
+describe("review verdict", () => {
+  it("blocks on a licence violation, flags a brief mismatch, passes otherwise", () => {
+    expect(reviewVerdict([{ kind: "brief", text: "a mug, not the bottle" }, { kind: "licence", text: "political poster" }])).toBe("block");
+    expect(reviewVerdict([{ kind: "brief", text: "a mug, not the bottle" }])).toBe("flag");
+    expect(reviewVerdict([])).toBe("pass");
   });
 });

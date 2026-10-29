@@ -9,10 +9,11 @@
  *    photo); implementations never keep them, never log them, and never fetch other images;
  *  - the licence policy code decides (lib/server/ai/policy.ts); a model only proposes and explains.
  */
-import type { Aspect } from "@/lib/creative";
+import type { Aspect, PromptDetails } from "@/lib/creative";
 import type { LicenceDoc } from "@/lib/model";
 
-export type AiProvider = "google" | "meta";
+/** "fixture": development only, a stored image instead of a model (never in production or the demo). */
+export type AiProvider = "google" | "meta" | "fixture";
 
 export type ImageInput = { bytes: Uint8Array; mime: "image/jpeg" | "image/png" };
 
@@ -24,14 +25,20 @@ export type CallMetrics = {
   latencyMs: number;
   /** Provider-reported usage, as returned (token counts, image counts). */
   usage?: Record<string, unknown>;
-  /** Estimated cost in US dollars, when the provider's price is known; null otherwise. */
-  costUsd: number | null;
+  /** Estimated from usage with the pricing table (lib/server/ai/pricing.ts); null when no price is pinned. */
+  cost: CostEstimate | null;
+  /** Request settings that change latency or quality (e.g. Muse Image's reasoning_strength), for the step log. */
+  settings?: Record<string, string | number>;
 };
+
+/** A cost computed from usage and the pricing table: always an estimate, never the bill. */
+export type CostEstimate = { costUsd: number; estimate: true; basis: string };
 
 // ---------------------------------------------------------------- ImageGenerator
 
 export type ImageOptions = {
-  aspectRatio: Aspect;
+  /** Unset: the provider's default aspect (Muse Image "auto"; Gemini GEMINI_ASPECT_RATIO or 1:1). */
+  aspectRatio?: Aspect;
   /** "draft": small and cheap (development); "full": full quality (demo mode). */
   quality: "draft" | "full";
   /** For logs only: which licence and render this call is for. */
@@ -54,15 +61,18 @@ export interface ImageGenerator {
 /** A box as fractions of the image (0–1), with the detector's confidence. */
 export type Box = { x: number; y: number; w: number; h: number; score: number };
 
-/** A mask for one detected person: a single-channel PNG the size of the image (white = person). */
-export type Mask = { png: Uint8Array; width: number; height: number };
+/**
+ * A mask for one detected person: SAM 3.1's raster for the person's box (height × width, row-major,
+ * 1 = person), decoded from its one_bit encoding. Used in memory only: never stored or logged.
+ */
+export type Mask = { width: number; height: number; bits: Uint8Array; box: Omit<Box, "score"> };
 
 export type PeopleDetection = {
   /** How many people are in the image. */
   count: number;
   /** One box per person, best first. */
   boxes: Box[];
-  /** One mask per person, in the same order as boxes; empty when the segmenter gives no masks. */
+  /** One mask per person, in the same order as boxes (SAM 3.1; none from the local face counter). Never persisted. */
   masks: Mask[];
   /** Faces, when the segmenter finds them separately (SAM 3.1 with a "face" prompt; YuNet locally). */
   faces?: Box[];
@@ -95,6 +105,8 @@ export type ShotProposal = {
   aspect: Aspect;
   /** The model's one-line reason for the shot. */
   rationale: string;
+  /** The prompt's parts (subject, action, setting, …), when the agent gives them. */
+  details?: PromptDetails;
 };
 
 /** Why the policy code refused something; each has a plain-language explanation (policy.ts, explain). */
@@ -111,6 +123,8 @@ export type RefusalCode =
 
 export type ShotDecision = {
   shotId: string | null;
+  /** Set on an alternative: the shot it replaces. */
+  alternativeOf?: string;
   allowed: boolean;
   code: RefusalCode | null;
   /** Plain language, for the brand: why it was allowed or refused. */
@@ -137,30 +151,45 @@ export interface BrandAgent {
   readonly label: string;
   /** What to configure for the model check, named in the filter's note ("GOOGLE_CLOUD_PROJECT", "MODEL_API_KEY"). */
   readonly configHint: string;
-  /** Refuse renders when the model check isn't configured (meta); google runs rules only, as in likeness-ai. */
-  readonly requiresPolicyCheck: boolean;
   /** Whether the model check can run here. */
   policyConfigured(): boolean;
   /** The model proposes shots for the brief; the licence policy code decides each one. */
   planShots(brief: BrandBrief, licence: LicenceDoc): Promise<ShotPlan>;
   /** The model's banned-use and category-fit check of one prompt. Throws on failure (the caller refuses). */
   checkPolicy(prompt: string, licence: LicenceDoc): Promise<ModelPolicyVerdict>;
+  /**
+   * One compliant alternative to a refused or flagged shot, given the reason. Optional: an agent without
+   * it gets no retry. Returns no shot when the model declines or its answer is invalid (fail closed).
+   */
+  reviseShot?(shot: ShotProposal, reason: AlternativeReason, licence: LicenceDoc): Promise<{ shot: ShotProposal | null; note: string; metrics: CallMetrics }>;
 }
+
+/** Why a shot needs an alternative: a policy refusal code, or REVIEW_FLAG with the reviewer's reasons. */
+export type AlternativeReason = { code: RefusalCode | "REVIEW_FLAG"; explanation: string };
 
 // ---------------------------------------------------------------- OutputReviewer
 
+/**
+ * What a reviewer found. A licence violation (banned content, a use outside the licence) blocks the
+ * image; a mismatch with the shot (wrong product, other setting) flags it for the brand to look at.
+ */
+export type ReviewFinding = { kind: "licence" | "brief"; text: string };
+
+export type ReviewVerdict = "pass" | "flag" | "block";
+
 export type ReviewResult = {
-  pass: boolean;
+  verdict: ReviewVerdict;
   /** Plain language, one per finding; on a pass, what was checked. */
   reasons: string[];
+  findings: ReviewFinding[];
   /** True when no reviewer ran (the google provider has none); the pipeline records it as skipped. */
   skipped?: boolean;
   metrics: CallMetrics | null;
 };
 
 export interface OutputReviewer {
-  /** Does the finished image match the brief and the licence (right product, allowed setting, nothing banned)? */
-  review(image: ImageInput, brief: string, licence: LicenceDoc): Promise<ReviewResult>;
+  /** Does the finished image match the shot and the licence (right product, allowed setting, nothing banned)? */
+  review(image: ImageInput, shot: ShotProposal, licence: LicenceDoc): Promise<ReviewResult>;
 }
 
 export type AiServices = {

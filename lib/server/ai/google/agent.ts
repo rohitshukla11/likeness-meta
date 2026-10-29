@@ -11,17 +11,9 @@ import { AssistantRefused, cleanInput, writePrompt } from "../../assistant";
 import { generateContent, geminiModels, vertexConfigured } from "../../gemini";
 import { ruleCheck } from "../../rules";
 import { decideShots, explain } from "../policy";
+import { FILTER_INSTRUCTION } from "../prompts";
+import { estimateCost } from "../pricing";
 import type { BrandAgent, BrandBrief, ModelPolicyVerdict, ShotPlan, ShotProposal } from "../types";
-
-const FILTER_INSTRUCTION = `You screen prompts for an image generator that renders a real, consenting adult's likeness under a licence.
-Banned uses, never allowed under any licence:
-- political: elections, candidates, parties, policy advocacy;
-- adult: sexual or sexualised content, nudity;
-- minors: anything involving minors or a childlike depiction;
-- impersonation: presenting the person as someone else, or as endorsing or saying something they did not;
-- deception: fake news, fake evidence, fake testimonials, depicting crimes or events as real.
-The licence covers exactly one use category. Decide whether the prompt fits it.
-Return JSON matching the schema.`;
 
 // JSON Schema for generationConfig.responseJsonSchema (responseSchema is deprecated).
 const FILTER_SCHEMA = {
@@ -49,7 +41,7 @@ async function checkPolicy(prompt: string, licence: LicenceDoc): Promise<ModelPo
     },
     20_000,
   );
-  const metrics = { provider: "google" as const, model, latencyMs: Date.now() - t, usage: res.usageMetadata, costUsd: null };
+  const metrics = { provider: "google" as const, model, latencyMs: Date.now() - t, usage: res.usageMetadata, cost: estimateCost("google", model, res.usageMetadata) };
   if (res.promptFeedback?.blockReason) return { banned: ["blocked by Gemini safety"], fitsCategory: false, reason: res.promptFeedback.blockReason, metrics };
   const text = res.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
   const out = JSON.parse(text);
@@ -62,7 +54,7 @@ async function planShots(brief: BrandBrief, licence: LicenceDoc): Promise<ShotPl
   const n = Math.min(MAX_SHOTS, Math.max(1, Math.floor(brief.shots ?? 1)));
   const input = cleanInput(brief);
   const shots: ShotProposal[] = [];
-  const metrics = () => ({ provider: "google" as const, model: geminiModels.filter(), latencyMs: Date.now() - t, costUsd: null });
+  const metrics = () => ({ provider: "google" as const, model: geminiModels.filter(), latencyMs: Date.now() - t, cost: null });
   try {
     for (let i = 0; i < n; i++) {
       const d = await writePrompt({ input, use: licence.use, creatorName: licence.creatorName, regenerate: i > 0 });
@@ -79,7 +71,6 @@ async function planShots(brief: BrandBrief, licence: LicenceDoc): Promise<ShotPl
 export const geminiBrandAgent: BrandAgent = {
   label: "Gemini",
   configHint: "GOOGLE_CLOUD_PROJECT",
-  requiresPolicyCheck: false,
   policyConfigured: vertexConfigured,
   planShots,
   checkPolicy,
