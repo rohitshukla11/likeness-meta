@@ -7,15 +7,17 @@ import { Providers } from "./providers";
 const display = Unbounded({ subsets: ["latin"], weight: ["700", "800", "900"], variable: "--font-display-face", display: "swap" });
 const body = Poppins({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-body-face", display: "swap" });
 
-const TAGLINE = "Your face. Your terms. Get paid per ad.";
+/** The product's name (renamed from Likeness, 2026-10-30) and tagline. */
+const PRODUCT = "Assent";
+const TAGLINE = "Your face. Your terms. Your yes.";
 const DESCRIPTION = `${TAGLINE} Creators license their likeness for AI image ads, priced by their audience; brands generate consented ads in minutes and pay per render; anyone can verify a file.`;
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"),
-  title: { default: `Likeness AI: ${TAGLINE}`, template: "%s · Likeness AI" },
+  title: { default: `${PRODUCT}: ${TAGLINE}`, template: `%s · ${PRODUCT}` },
   description: DESCRIPTION,
-  openGraph: { type: "website", siteName: "Likeness AI", title: `Likeness AI: ${TAGLINE}`, description: DESCRIPTION },
-  twitter: { card: "summary", title: `Likeness AI: ${TAGLINE}`, description: DESCRIPTION },
+  openGraph: { type: "website", siteName: PRODUCT, title: `${PRODUCT}: ${TAGLINE}`, description: DESCRIPTION },
+  twitter: { card: "summary", title: `${PRODUCT}: ${TAGLINE}`, description: DESCRIPTION },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

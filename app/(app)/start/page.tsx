@@ -44,7 +44,7 @@ export default function StartPage() {
     );
 
   return (
-    <AppPage title="How will you use Likeness?" description="Pick one to start. You can switch later.">
+    <AppPage title="How will you use Assent?" description="Pick one to start. You can switch later.">
       <div className="grid gap-4 sm:grid-cols-2">
         <Card title="I'm a creator">
           <p className="m-0 text-[15px] text-grey">Connect your YouTube channel, take a quick live face check, and license your likeness for AI ads. You approve every brand and get paid per render.</p>

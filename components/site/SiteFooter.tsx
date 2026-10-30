@@ -37,7 +37,7 @@ export function SiteFooter() {
               Source<span className="sr-only"> (opens GitHub)</span>
             </a>
           </span>
-          <span>© 2026 Likeness</span>
+          <span>© 2026 Assent</span>
         </div>
       </div>
     </footer>

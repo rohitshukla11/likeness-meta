@@ -1,7 +1,8 @@
 "use client";
 /**
  * Admins only: each render's steps (latency, estimated cost), totals per day and per provider, and blocked renders with reasons.
- * The only view that lists development (fixture) renders; any render, delivered or blocked, reopens its step log and consent figure.
+ * The only view that lists development (fixture) renders; eval-brand renders are marked here and hidden from the creator.
+ * Any render, delivered or blocked, reopens its step log and consent figure.
  */
 import { useEffect, useState } from "react";
 import { AppPage, Card, pillClass } from "@/components/ds";
@@ -16,8 +17,8 @@ type Overview = {
   days: number;
   note: string;
   totals: { byDay: Totals[]; byProvider: Totals[]; total: Totals };
-  renders: { id: string; brandId: string; provider: string; fixture: boolean; status: string; startedAt: number; latencyMs: number | null; costUsd: number; outcome: string | null; steps: Step[] }[];
-  blocked: { id: string; createdAt: number; brandId: string; blockedBy: string; code: string | null; explanation: string; model: string; fixture: boolean; costUsd: number | null; costComplete: boolean }[];
+  renders: { id: string; brandId: string; provider: string; fixture: boolean; evalRun: boolean; status: string; startedAt: number; latencyMs: number | null; costUsd: number; outcome: string | null; steps: Step[] }[];
+  blocked: { id: string; createdAt: number; brandId: string; blockedBy: string; code: string | null; explanation: string; model: string; fixture: boolean; evalRun: boolean; costUsd: number | null; costComplete: boolean }[];
 };
 
 const usd = (n: number | null) => (n === null ? "—" : `$${n.toFixed(4)}`);
@@ -27,6 +28,7 @@ const th = "border-b border-divider px-2 py-1 text-left font-semibold";
 const td = "border-b border-divider px-2 py-1 align-top";
 
 const DevBadge = () => <span className="rounded-full bg-wait-bg px-2 py-0.5 text-[12px] font-semibold text-wait">Test render (development)</span>;
+const EvalBadge = () => <span className="rounded-full bg-wait-bg px-2 py-0.5 text-[12px] font-semibold text-wait">Evaluation run (automated test)</span>;
 
 /** Reopen one render's stored step log and consent figure. */
 function Reopen({ id }: { id: string }) {
@@ -123,7 +125,7 @@ export default function AdminPage() {
                   <tr key={b.id}>
                     <td className={td}>{when(b.createdAt)}</td>
                     <td className={td}>
-                      <b className="text-bad">{b.code ?? "—"}</b> by {b.blockedBy} {b.fixture && <DevBadge />}
+                      <b className="text-bad">{b.code ?? "—"}</b> by {b.blockedBy} {b.fixture && <DevBadge />} {b.evalRun && <EvalBadge />}
                     </td>
                     <td className={td}>
                       {b.explanation}
@@ -143,7 +145,7 @@ export default function AdminPage() {
             {data.renders.map((r) => (
               <details key={r.id} className="border-b border-divider py-1 text-[13px]">
                 <summary className="cursor-pointer">
-                  {when(r.startedAt)} · <b>{r.status}</b> · {r.provider} · {secs(r.latencyMs)} · {usd(r.costUsd)} · brand {r.brandId.slice(0, 12)} · {r.id} {r.fixture && <DevBadge />}
+                  {when(r.startedAt)} · <b>{r.status}</b> · {r.provider} · {secs(r.latencyMs)} · {usd(r.costUsd)} · brand {r.brandId.slice(0, 12)} · {r.id} {r.fixture && <DevBadge />} {r.evalRun && <EvalBadge />}
                 </summary>
                 <Reopen id={r.id} />
                 <table className="mt-1 w-full border-collapse">

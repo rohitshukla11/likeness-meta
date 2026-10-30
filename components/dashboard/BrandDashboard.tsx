@@ -5,6 +5,7 @@ import { Card, StatCard, pillClass } from "@/components/ds";
 import { StatusBadge, inputClass } from "@/components/ui";
 import type { Me } from "@/components/auth/AuthProvider";
 import { api, reason } from "@/lib/client/firebase";
+import type { Aspect } from "@/lib/creative";
 import { AUTO_APPROVED_LABEL, credits, DEMO_TOPUP, useLabel } from "@/lib/model";
 import { CreativeAssistant } from "./CreativeAssistant";
 import { ErrorNotice } from "./ErrorNotice";
@@ -84,6 +85,7 @@ export function BrandDashboard({ me, refresh }: { me: Me; refresh: () => Promise
         ))}
         {licences.map((l) => (
           <LicenceCard
+            aspects={me.aspects ?? ["1:1"]}
             key={l.id}
             l={l}
             onRendered={async (render) => {
@@ -113,6 +115,9 @@ export function BrandDashboard({ me, refresh }: { me: Me; refresh: () => Promise
               r={c.r}
               mode="brand"
               highlight={c.r.id === highlight}
+              onChanged={async () => {
+                await Promise.all([renders.reload(), lists.reload(), refresh()]);
+              }}
             />
           ),
         )}
@@ -123,9 +128,9 @@ export function BrandDashboard({ me, refresh }: { me: Me; refresh: () => Promise
 
 type Made = Omit<Render, "creatorName" | "brandName" | "use">;
 
-function LicenceCard({ l, onRendered, onBlocked }: { l: LicenceRow; onRendered: (r: Made) => Promise<void>; onBlocked: () => void }) {
+function LicenceCard({ l, aspects, onRendered, onBlocked }: { l: LicenceRow; aspects: Aspect[]; onRendered: (r: Made) => Promise<void>; onBlocked: () => void }) {
   const [brief, setBrief] = useState("Smiling in a sunlit café holding a ceramic coffee cup, product shot for a spring campaign");
-  const [aspect, setAspect] = useState<"1:1" | "16:9" | "9:16">("1:1");
+  const [aspect, setAspect] = useState<Aspect>("1:1");
   const [busy, setBusy] = useState<string | null>(null);
   const [out, setOut] = useState<string | null>(null);
   const [err, setErr] = useState<unknown>(null);
@@ -164,9 +169,10 @@ function LicenceCard({ l, onRendered, onBlocked }: { l: LicenceRow; onRendered: 
         <>
           <CreativeAssistant
             licenceId={l.id}
+            aspects={aspects}
             onDraft={(d) => {
               setBrief(d.brief);
-              setAspect(d.aspect);
+              setAspect(aspects.includes(d.aspect) ? d.aspect : "1:1");
             }}
           />
           <label className="flex flex-col gap-1 text-[14px]">
@@ -174,7 +180,8 @@ function LicenceCard({ l, onRendered, onBlocked }: { l: LicenceRow; onRendered: 
             <textarea ref={briefRef} value={brief} onChange={(e) => setBrief(e.target.value)} rows={brief.length > 200 ? 6 : 2} maxLength={2000} className={`${inputClass} py-2`} />
           </label>
           <span className="flex flex-wrap items-center gap-2">
-            {(["1:1", "16:9", "9:16"] as const).map((a) => (
+            {/* Only the shapes this server's AI provider can make. */}
+            {aspects.map((a) => (
               <button key={a} type="button" aria-pressed={aspect === a} onClick={() => setAspect(a)} className={pillClass(aspect === a ? "ink" : "outline", "min-h-9 px-3 text-[13px]")}>
                 {a}
               </button>

@@ -48,15 +48,28 @@ function useSignedUrl(id: string, variant: "preview" | "file", enabled = true) {
   return { url: s?.url ?? null, state, error, onError: () => void load("expired") };
 }
 
-export const RenderCard = forwardRef<HTMLDivElement, { r: Render; mode: "brand" | "creator"; highlight?: boolean }>(function RenderCard(
-  { r, mode, highlight },
+export const RenderCard = forwardRef<HTMLDivElement, { r: Render; mode: "brand" | "creator"; highlight?: boolean; onChanged?: () => Promise<void> | void }>(function RenderCard(
+  { r, mode, highlight, onChanged },
   ref,
 ) {
   const preview = useSignedUrl(r.id, "preview");
   const [open, setOpen] = useState(false);
   const [steps, setSteps] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  const ratio = r.aspect === "16:9" ? "16 / 9" : r.aspect === "9:16" ? "9 / 16" : r.aspect === "1:1" ? "1 / 1" : undefined;
+  const [alt, setAlt] = useState<{ busy: boolean; done: string | null; err: unknown }>({ busy: false, done: null, err: null });
+  // One alternative per flagged image, at the brand's choice: a new render, charged as one.
+  const canAskAlternative = mode === "brand" && r.review?.verdict === "flag" && !r.alternativeOf && !r.alternativeId && !alt.done;
+  const askAlternative = async () => {
+    setAlt({ busy: true, done: null, err: null });
+    try {
+      const x = await api<{ render: { price: number } }>("/api/render/alternative", { method: "POST", body: JSON.stringify({ renderId: r.id, requestId: crypto.randomUUID() }) });
+      setAlt({ busy: false, done: `Alternative ready: ${x.render.price} credits paid. It's at the top of Your renders.`, err: null });
+      await onChanged?.();
+    } catch (e) {
+      setAlt({ busy: false, done: null, err: e });
+    }
+  };
+  const ratio = r.aspect ? r.aspect.replace(":", " / ") : undefined;
 
   const media =
     preview.state === "loading" ? (
@@ -96,6 +109,8 @@ export const RenderCard = forwardRef<HTMLDivElement, { r: Render; mode: "brand" 
           </span>
         )}
         {r.review?.verdict === "flag" && <span className="text-[13px] text-wait">Flagged by the output review: {r.review.reasons.join(" ")}</span>}
+        {r.alternativeOf && <span className="text-[13px] text-grey">The alternative to a flagged image.</span>}
+        {mode === "brand" && r.review?.verdict === "flag" && r.alternativeId && !alt.done && <span className="text-[13px] text-grey">An alternative was asked for.</span>}
         <span className="text-[13px] text-grey">&ldquo;{r.brief.length > 120 ? `${r.brief.slice(0, 117)}…` : r.brief}&rdquo;</span>
         <span className="mt-1 flex flex-wrap gap-2">
           {mode === "brand" && (
@@ -116,8 +131,15 @@ export const RenderCard = forwardRef<HTMLDivElement, { r: Render; mode: "brand" 
               Verify
             </Link>
           )}
+          {canAskAlternative && (
+            <button type="button" disabled={alt.busy} onClick={askAlternative} className={pillClass("lime", "min-h-9 px-3 text-[13px]")}>
+              {alt.busy ? "Making the alternative…" : `Ask for an alternative (${r.price} credits)`}
+            </button>
+          )}
           <StepsButton open={steps} onClick={() => setSteps((v) => !v)} />
         </span>
+        {alt.done && <span className="text-[13px] text-ok">{alt.done}</span>}
+        <ErrorNotice error={alt.err} />
         {steps && <RenderTimeline renderId={r.id} />}
         {msg && <span className="text-[13px] text-bad">{msg}</span>}
       </div>

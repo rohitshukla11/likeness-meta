@@ -97,7 +97,7 @@ function Hero() {
 
       <header className="lk-drop relative mx-auto flex max-w-[1320px] flex-wrap items-center gap-x-7 gap-y-1 px-4 py-4 sm:px-8 sm:py-5">
         <Link href="/" className="font-display text-[18px] font-black tracking-[0.02em] text-ink no-underline sm:text-[20px]">
-          LIKENESS
+          ASSENT
         </Link>
         <nav aria-label="Main" className="order-3 flex w-full flex-wrap gap-x-4 text-[13px] font-medium sm:gap-x-7 sm:text-[14px] md:order-none md:w-auto md:flex-1">
           <a href="#how" className="py-3 text-ink no-underline hover:underline">

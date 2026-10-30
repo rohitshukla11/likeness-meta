@@ -84,7 +84,7 @@ export default function OnboardPage() {
       {step === 1 && (
         <Card title="Connect your YouTube channel">
           <p className="m-0 text-[15px] text-grey">
-            Google asks you to let Likeness <b>see your YouTube account</b> (read-only). We read your channel&apos;s name, avatar and subscriber count once, to show you
+            Google asks for <b>read-only access to your YouTube account</b>. We read your channel&apos;s name, avatar and subscriber count once, to show you
             own it. We can&apos;t post, edit or see anything private, and we don&apos;t keep the access.
           </p>
           <button

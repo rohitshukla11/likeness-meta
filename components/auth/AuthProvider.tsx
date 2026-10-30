@@ -1,5 +1,6 @@
 "use client";
-/** The signed-in user and their Likeness account (role, creator state, brand, demo credits). */
+/** The signed-in user and their Assent account (role, creator state, brand, demo credits). */
+import type { Aspect } from "@/lib/creative";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { api, auth, firebaseConfigured } from "@/lib/client/firebase";
@@ -24,6 +25,8 @@ export type Me = {
   credits: number;
   judge?: boolean;
   admin?: boolean;
+  /** The image shapes the server's AI provider can make. */
+  aspects?: Aspect[];
 };
 
 type Ctx = { user: User | null; me: Me | null; loading: boolean; configured: boolean; refresh: () => Promise<void> };

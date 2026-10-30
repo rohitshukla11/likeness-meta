@@ -4,13 +4,13 @@ import { pillClass } from "@/components/ds";
 import { inputClass } from "@/components/ui";
 import { api } from "@/lib/client/firebase";
 import { ErrorNotice } from "./ErrorNotice";
-import { DEFAULT_INPUT, MOODS, TEMPLATES, type AssistantDraft, type AssistantInput } from "@/lib/creative";
+import { DEFAULT_INPUT, MOODS, TEMPLATES, type Aspect, type AssistantDraft, type AssistantInput } from "@/lib/creative";
 
 /**
  * "✨ Write it for me": a few optional inputs → a detailed prompt from Gemini, which fills the Brief
  * box. Free; text only. Everything it writes stays editable.
  */
-export function CreativeAssistant({ licenceId, onDraft }: { licenceId: string; onDraft: (d: AssistantDraft) => void }) {
+export function CreativeAssistant({ licenceId, aspects, onDraft }: { licenceId: string; aspects: Aspect[]; onDraft: (d: AssistantDraft) => void }) {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState<AssistantInput>(DEFAULT_INPUT);
   const [draft, setDraft] = useState<AssistantDraft | null>(null);
@@ -77,7 +77,7 @@ export function CreativeAssistant({ licenceId, onDraft }: { licenceId: string; o
       </span>
       <span className="flex flex-wrap items-center gap-2 text-[13px]">
         <span className="text-grey">Aspect</span>
-        {(["1:1", "16:9", "9:16"] as const).map((a) => (
+        {aspects.map((a) => (
           <button key={a} type="button" aria-pressed={input.aspect === a} onClick={() => set("aspect", a)} className={chip(input.aspect === a)}>
             {a}
           </button>

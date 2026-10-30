@@ -64,7 +64,8 @@ export function RenderTimeline({ requestId, renderId, running = false, blockedCa
   }, [requestId, renderId, running]);
 
   if (missing) return <span className="text-[13px] text-grey">No step log was kept for this render (made before step logs existed).</span>;
-  if (!log) return <span className="text-[13px] text-grey">{running ? "Starting…" : "Loading the steps…"}</span>;
+  // A live request refused before any step (e.g. an unavailable shape) has no log: nothing to show once it ends.
+  if (!log) return running ? <span className="text-[13px] text-grey">Starting…</span> : renderId ? <span className="text-[13px] text-grey">Loading the steps…</span> : null;
   const total = log.steps.reduce((s, x) => s + (x.costUsd ?? 0), 0);
   const list = (
     <ol className="m-0 flex list-none flex-col gap-1 rounded-[12px] border border-divider bg-white p-3 text-[13px]" aria-label="Render steps" aria-live="polite">

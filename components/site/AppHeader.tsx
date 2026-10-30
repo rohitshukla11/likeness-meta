@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { pillClass } from "@/components/ds";
-import { IconPerson } from "@/components/ds/icons";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { reason, signIn, signOut } from "@/lib/client/firebase";
 
@@ -23,8 +22,8 @@ export function AppHeader() {
   return (
     <header className="on-dark border-b border-ink-line text-white">
       <div className="mx-auto flex max-w-[1320px] flex-wrap items-center gap-x-7 gap-y-3 px-4 py-[18px] sm:px-8">
-        <Link href="/" aria-label="Likeness AI home" className="flex h-11 w-11 items-center justify-center rounded-full bg-ink-raised text-white">
-          <IconPerson size={20} />
+        <Link href="/" aria-label="Assent home" className="font-display text-[18px] font-black tracking-[0.02em] text-white no-underline">
+          ASSENT
         </Link>
         <nav aria-label="App" className="order-3 flex w-full flex-wrap gap-x-5 gap-y-1 text-[14px] font-medium sm:order-none sm:w-auto sm:flex-1 sm:gap-x-7 sm:text-[15px]">
           {[...NAV, ...(me?.admin ? [{ href: "/admin", label: "Admin" }] : [])].map((n) => {

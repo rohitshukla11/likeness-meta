@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { api, reason } from "@/lib/client/firebase";
+import type { Aspect } from "@/lib/creative";
 import type { LicenceDoc, LicenceStatus, RequestDoc } from "@/lib/model";
 
 export type LicenceRow = LicenceDoc & { status: LicenceStatus };
@@ -22,7 +23,7 @@ export type Render = {
   fee: number;
   brief: string;
   createdAt: number;
-  aspect?: "1:1" | "16:9" | "9:16";
+  aspect?: Aspect;
   hasPreview?: boolean;
   /** The consent gate's result (lib/server/consentGate.ts). */
   consent?: { code: string | null; explanation: string; segmenter: string | null };
@@ -35,6 +36,10 @@ export type Render = {
   use: string;
   /** A development render (AI_PROVIDER=fixture): never listed for the brand or creator. */
   fixture?: true;
+  /** The flagged render this one is the brand's alternative to. */
+  alternativeOf?: string;
+  /** On a flagged render: the alternative already asked for (one at most). */
+  alternativeId?: string;
 };
 
 export const pipelineLabel = (r: Pick<Render, "model">) => `Gemini (${r.model})`;
