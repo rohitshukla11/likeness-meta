@@ -4,7 +4,9 @@
  * face is never framed out by a short brief.
  */
 
-export type Aspect = "1:1" | "16:9" | "9:16";
+export type Aspect = "1:1" | "16:9" | "9:16" | "3:2" | "2:3";
+/** Every shape the app knows; each AI provider offers only those it can make (lib/server/ai supportedAspects). */
+export const ASPECTS: Aspect[] = ["1:1", "3:2", "2:3", "16:9", "9:16"];
 export type Mood = "warm" | "energetic" | "premium" | "playful";
 
 export const MOODS: Mood[] = ["warm", "energetic", "premium", "playful"];
@@ -54,6 +56,8 @@ export const ASPECT_GUIDANCE: Record<Aspect, string> = {
   "1:1": "Square framing: the person centred, clean space on one side for a headline.",
   "16:9": "Horizontal framing: the person on the left or right third, clean space on the other side for a headline.",
   "9:16": "Vertical framing: the person in the centre third, clean space above or below for a headline.",
+  "3:2": "Horizontal framing: the person on the left or right third, clean space on the other side for a headline.",
+  "2:3": "Vertical framing: the person in the centre third, clean space above or below for a headline.",
 };
 
 /** What the server adds to every still prompt. */

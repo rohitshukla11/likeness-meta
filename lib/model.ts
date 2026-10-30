@@ -153,8 +153,8 @@ export function capRefusal(site: DailyUsage, brand: DailyUsage, caps: DailyCaps)
   const used = (u: DailyUsage) => u.renders + (u.blocked ?? 0);
   const blockedNote = (u: DailyUsage) => (u.blocked ? ` (${plural(u.blocked, "image")} the consent check or reviewer blocked count too)` : "");
   if (used(brand) >= caps.brandRenders)
-    return `You've used today's ${plural(caps.brandRenders, "ad")}${blockedNote(brand)}, the daily limit per brand while Likeness AI is being evaluated. You can make more after 00:00 UTC.`;
-  if (used(site) >= caps.siteRenders) return `Likeness AI has made today's ${caps.siteRenders} ads across all brands (a prototype on a small budget). Please try again after 00:00 UTC.`;
+    return `You've used today's ${plural(caps.brandRenders, "ad")}${blockedNote(brand)}, the daily limit per brand while Assent is being evaluated. You can make more after 00:00 UTC.`;
+  if (used(site) >= caps.siteRenders) return `Assent has made today's ${caps.siteRenders} ads across all brands (a prototype on a small budget). Please try again after 00:00 UTC.`;
   return null;
 }
 

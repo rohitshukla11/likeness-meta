@@ -34,6 +34,10 @@ export const REASONS = {
   NO_CREATOR: { title: "Creator not found", next: plain("The creator may have left. Choose another creator.", "find-creator") },
   // The brief and the policy check
   EMPTY_BRIEF: { title: "Empty brief", next: plain("Describe the shot in a few words, then try again.", "edit-brief") },
+  NO_RENDER: { title: "Render not found", next: plain("Reload the page; the image may belong to another account.") },
+  NOT_FLAGGED: { title: "No alternative for this image", next: plain("Only an image the output review flagged can have an alternative.") },
+  ALTERNATIVE_USED: { title: "Alternative already made", next: plain("Each flagged image can have one alternative; it's in Your renders.") },
+  UNSUPPORTED_SIZE: { title: "Shape not available", next: plain("Choose one of the shapes offered and try again."), uncharged: true },
   BANNED_USE: { title: "Banned use", next: plain("Political, adult, minor-related, impersonating and deceptive uses are never allowed. Change the brief and try again.", "edit-brief") },
   OUTSIDE_LICENSED_USE: { title: "Outside the licensed use", next: plain("This licence covers one use only. Rewrite the brief for that use, or request a licence for the other one.", "edit-brief") },
   MODEL_REFUSED: { title: "Refused by the policy model", next: plain("Rephrase the brief and try again; the reason is shown above.", "edit-brief") },

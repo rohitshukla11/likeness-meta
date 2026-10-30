@@ -6,14 +6,37 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "next typegen && tsc --noEmit"
+    "test": "vitest run",
+    "typecheck": "next typegen && tsc --noEmit",
+    "c2pa:testcert": "sh scripts/c2pa-testcert.sh",
+    "face:models": "sh scripts/face-models.sh",
+    "seed:demo": "tsx --conditions=react-server scripts/seed-demo.ts",
+    "copy:demo": "tsx --conditions=react-server scripts/copy-demo-creators.ts",
+    "seed:judges": "tsx --conditions=react-server scripts/seed-judges.ts",
+    "meta:image-check": "tsx --conditions=react-server scripts/muse-image-check.ts",
+    "meta:sam-check": "tsx --conditions=react-server scripts/sam-check.ts",
+    "meta:spark-check": "tsx --conditions=react-server scripts/spark-check.ts",
+    "eval:synthetic-faces": "tsx --conditions=react-server scripts/synthetic-faces.ts",
+    "render:check": "tsx --conditions=react-server scripts/render-check.ts",
+    "reset:eval": "tsx --conditions=react-server scripts/reset-eval.ts",
+    "eval:fixtures": "tsx --conditions=react-server scripts/eval-fixtures.ts",
+    "eval": "tsx --conditions=react-server scripts/eval.ts",
+    "e2e:smoke": "tsx --conditions=react-server scripts/e2e-smoke.ts"
   },
   "dependencies": {
+    "@contentauth/c2pa-node": "0.9.9",
+    "@google-cloud/kms": "6.3.0",
+    "@google-cloud/storage": "8.4.0",
     "@mediapipe/tasks-vision": "1.1.1",
     "firebase": "13.0.0",
+    "firebase-admin": "14.5.0",
+    "google-auth-library": "11.3.0",
     "next": "16.3.8",
+    "onnxruntime-node": "1.30.0",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "server-only": "0.0.1",
+    "sharp": "0.35.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -21,7 +44,9 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "tsx": "4.23.15",
+    "typescript": "^5",
+    "vitest": "5.0.3"
   },
   "packageManager": "pnpm@12.5.1",
   "engines": {

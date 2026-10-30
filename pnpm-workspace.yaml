@@ -2,6 +2,10 @@ allowBuilds:
   sharp: false
   unrs-resolver: false
   protobufjs: false
+  esbuild: false
+  # Downloads the prebuilt C2PA native binding for this platform from the c2pa-js GitHub release.
+  "@contentauth/c2pa-node": true
+  # Prebuilt CPU binaries ship in the package; its postinstall only fetches CUDA files on Linux.
+  onnxruntime-node: false
   # Not needed at runtime.
   "@firebase/util": false
-  protobufjs: set this to true or false
