@@ -1,0 +1,11 @@
+node_modules
+.next
+.models
+.data
+.data-demo
+.env*
+!.env.example
+*.log
+# Never in the image: local secrets (test C2PA key, judge passwords) and git history.
+.secrets
+.git
